@@ -1,0 +1,64 @@
+name: Deploy Moxie Jobs
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: moxie-jobs-production
+  cancel-in-progress: false
+
+jobs:
+  deploy_production:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        env:
+          # The repo is private: this job's own short-lived token lets the server fetch it (never stored there).
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          envs: GH_TOKEN,GH_REPO
+          command_timeout: 30m
+          script: |
+            set -e
+
+            echo "Starting Moxie Jobs deployment..."
+
+            mkdir -p ~/apps/moxie-jobs
+            cd ~/apps/moxie-jobs
+
+            # Pull latest code (the token is used for this fetch only).
+            [ -d .git ] || git init -q
+            git fetch -q "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" main
+            git reset -q --hard FETCH_HEAD
+
+            # The server's .env (not in git) holds every setting.
+            if [ ! -f .env ]; then
+              echo "Missing ~/apps/moxie-jobs/.env (copy .env.example and fill in production values)"
+              exit 1
+            fi
+            # The web app reads its NEXT_PUBLIC_* values at build time.
+            grep -E '^NEXT_PUBLIC_' .env > apps/web/.env.production || true
+
+            # Install dependencies (pnpm, pinned to the repo's version)
+            npx --yes pnpm@10.13.1 install --frozen-lockfile
+
+            # Build everything (shared, Prisma client, API, worker, web)
+            npx --yes pnpm@10.13.1 build
+
+            # Apply database migrations
+            npx --yes pnpm@10.13.1 db:migrate:deploy
+
+            # Start or restart the API, worker and web app
+            pm2 startOrRestart ecosystem.config.cjs --update-env
+            pm2 save
+
+            echo "Moxie Jobs deployed successfully!"

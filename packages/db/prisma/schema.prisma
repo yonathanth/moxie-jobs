@@ -1,0 +1,398 @@
+// Ethio Jobs database.
+//
+// Migrations: write/preview SQL without a database
+//   (pnpm --filter @ethio/db migrate:diff), commit it under prisma/migrations,
+//   apply with `migrate:deploy`. Never run `prisma migrate dev`/`reset`/`db push`
+//   against a shared database: see CLAUDE.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled (app runtime)
+  directUrl = env("DIRECT_URL") // direct (migrations)
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────
+
+model User {
+  id           String  @id @default(uuid())
+  telegramId   BigInt  @unique
+  username     String?
+  firstName    String?
+  lastName     String?
+  languageCode String?
+  isPremiumTg  Boolean @default(false)
+
+  // "free" | "pro" | "career" (see @ethio/shared PLANS). planExpiresAt = null means no expiry.
+  plan          String    @default("free")
+  planExpiresAt DateTime?
+
+  // Delivery state
+  alertsPaused Boolean   @default(false)
+  // Set when Telegram reports the user blocked the bot; we stop sending until they return.
+  botBlockedAt DateTime?
+
+  // Deep-link payload of the first /start (e.g. "ref_abc", "src_facebook"), for attribution.
+  startParam         String?
+  onboardedAt        DateTime?
+  // The one reminder sent to people who opened the bot but never finished setup.
+  onboardingNudgedAt DateTime?
+  lastSeenAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  preferences UserPreferences?
+  professions UserProfession[]
+  functions   UserFunction[]
+  payments    Payment[]
+  cvs         CvDocument[]
+
+  @@index([createdAt])
+}
+
+model UserPreferences {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // FieldOfStudy ids (validated by the API; arrays can't carry foreign keys).
+  fieldOfStudyIds String[]  @default([])
+  // EducationLevel id from @ethio/shared, null = not given.
+  educationLevel  String?
+  // ExperienceBand id from @ethio/shared, null = not given.
+  experienceBand  String?
+  // City ids from @ethio/shared. Empty = anywhere in Ethiopia.
+  locationIds     String[]  @default([])
+  remoteOk        Boolean   @default(true)
+  // EmploymentType ids. Empty = any.
+  employmentTypes String[]  @default([])
+  // Optional, only used to skip jobs restricted to the other gender. null = not given.
+  gender          String?
+  // Opt-in: also send jobs located abroad (e.g. Gulf, MoLS foreign employment).
+  overseasOk      Boolean   @default(false)
+  // Optional expected monthly salary (ETB). Only jobs that STATE a pay below salaryMin are skipped.
+  salaryMin       Int?
+  salaryMax       Int?
+  // Last daily summary sent (free plan: held-back matches); one per day.
+  lastBatchAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Professions a user follows (ordered, main one first).
+model UserProfession {
+  userId       String
+  professionId String
+  sortOrder    Int        @default(0)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profession   Profession @relation(fields: [professionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, professionId])
+  @@index([professionId])
+}
+
+/// Whole job categories a user follows ("any Accounting & Finance job").
+model UserFunction {
+  userId     String
+  functionId String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  function   JobFunction @relation(fields: [functionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, functionId])
+  @@index([functionId])
+}
+
+// ─── Taxonomy (seeded, editable by admins) ────────────────────────────────
+
+/// Job category, e.g. "Accounting & Finance". id is a stable slug.
+model JobFunction {
+  id        String  @id
+  name      String
+  emoji     String?
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  professions Profession[]
+  followers   UserFunction[]
+}
+
+/// Specific role, e.g. "Junior Accountant". id is a stable slug.
+model Profession {
+  id         String      @id
+  name       String
+  functionId String
+  function   JobFunction @relation(fields: [functionId], references: [id])
+  // Other titles (incl. Amharic) that mean this profession, used by search and extraction.
+  aliases    String[]    @default([])
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  followers UserProfession[]
+
+  @@index([functionId])
+}
+
+/// Degree field, e.g. "Accounting", "Civil Engineering". id is a stable slug.
+model FieldOfStudy {
+  id        String   @id
+  name      String
+  aliases   String[] @default([])
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Ingestion (see docs/ingestion-spec.md) ──────────────────────────────
+
+/// A place jobs come from (a Telegram channel for now). id = seed key.
+model Source {
+  id             String   @id
+  title          String
+  kind           String   @default("telegram") // telegram | website (later)
+  handle         String?  @unique // channel @username without "@", null until confirmed
+  tgChannelId    BigInt?  @unique // numeric id, stable even if the handle changes
+  type           String // original | repost | niche | regional | newspaper | employer
+  format         String // full | website_link | miniapp_link | mixed
+  websiteDomains String[] @default([])
+  tier           Int      @default(1)
+  trust          Float    @default(0.7)
+  linkPriority   Int      @default(50)
+  // Listener reads this source only when true (after the channel is joined).
+  isActive       Boolean  @default(false)
+  // Catch-up cursor: highest message id stored.
+  lastMessageId  BigInt?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  posts RawPost[]
+}
+
+/// A source message stored verbatim. Doubles as the processing queue (status + lockedAt).
+model RawPost {
+  id         String    @id @default(uuid())
+  sourceId   String
+  messageId  BigInt
+  postedAt   DateTime
+  editedAt   DateTime?
+  text       String
+  buttons    Json      @default("[]") // [{ text, url }]
+  links      String[]  @default([])
+  textHash   String
+  // new | processing | skipped | done | failed
+  status     String    @default("new")
+  attempts   Int       @default(0)
+  lockedAt   DateTime?
+  skipReason String?
+  pageUrl    String?
+  pageText   String?
+  error      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  source    Source        @relation(fields: [sourceId], references: [id])
+  sightings JobSighting[]
+
+  @@unique([sourceId, messageId])
+  @@index([textHash])
+  @@index([status, createdAt])
+}
+
+model Job {
+  id              String    @id @default(uuid())
+  slug            String    @unique
+  title           String
+  rawTitle        String
+  company         String?
+  companyKey      String?
+  professionId    String?
+  functionId      String?
+  fieldOfStudyIds String[]  @default([])
+  educationLevel  String?
+  experienceMin   Int?
+  experienceMax   Int?
+  employmentType  String?
+  workMode        String? // onsite | remote | hybrid
+  locationIds     String[]  @default([])
+  locationRaw     String?
+  isOverseas      Boolean   @default(false)
+  country         String? // for overseas jobs
+  // EmployerType id from @ethio/shared (local_private | government | ngo | international_org | embassy | foreign_company)
+  employerType    String?
+  positions       Int?
+  salaryMin       Int?
+  salaryMax       Int?
+  salaryCurrency  String?
+  salaryPeriod    String?
+  salaryRaw       String?
+  genderReq       String    @default("any") // any | female | male
+  deadline        DateTime?
+  deadlineRaw     String?
+  summary         String
+  skills          String[]  @default([])
+  applyMethod     String // url | email | telegram | phone | in_person | source
+  applyUrl        String?
+  applyEmail      String?
+  applyTelegram   String?
+  applyPhone      String?
+  applyNotes      String?
+  primarySourceId String
+  sourceUrl       String
+  qualityFlags    String[]  @default([])
+  // active | expired | hidden | review
+  status          String    @default("active")
+  firstSeenAt     DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sightings  JobSighting[]
+  deliveries Delivery[]
+
+  @@index([status, firstSeenAt])
+  @@index([professionId, status])
+  @@index([functionId, status])
+  @@index([companyKey, deadline])
+}
+
+/// A plan purchase. `id` is our transaction id sent to SantimPay (comes back as thirdPartyId).
+model Payment {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan          String // pro | career
+  period        String // week | month | quarter
+  amount        Int // ETB
+  currency      String    @default("ETB")
+  // pending | paid | failed | cancelled
+  status        String    @default("pending")
+  provider      String    @default("santimpay")
+  providerTxnId String?
+  // One-time CV purchases (cv_new | cv_tailor): the CV this payment unlocks.
+  cvDocumentId  String?
+  paymentVia    String? // e.g. Telebirr, CBE Birr
+  // When this payment's plan period runs (set on activation).
+  periodStart   DateTime?
+  periodEnd     DateTime?
+  error         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  paidAt        DateTime?
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+/// One per (job, source post): which channels carried a job and who was first.
+model JobSighting {
+  jobId     String
+  rawPostId String
+  seenAt    DateTime @default(now())
+  isFirst   Boolean  @default(false)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  rawPost   RawPost  @relation(fields: [rawPostId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, rawPostId])
+  @@index([rawPostId])
+}
+
+model Delivery {
+  id           String    @id @default(uuid())
+  userId       String
+  jobId        String
+  mode         String // instant | batch | urgent
+  // pending | sent | skipped | failed | locked (premium job, plan lacks it) | teased (counted in the daily teaser)
+  status       String    @default("pending")
+  scheduledFor DateTime
+  sentAt       DateTime?
+  tgMessageId  BigInt?
+  clickedAt    DateTime?
+  error        String?
+  createdAt    DateTime  @default(now())
+  job          Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([status, scheduledFor])
+}
+
+/// Per extraction call: cost and quality tracking.
+model ExtractionLog {
+  id           String   @id @default(uuid())
+  rawPostId    String
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  cachedTokens Int      @default(0)
+  latencyMs    Int
+  jobsFound    Int      @default(0)
+  ok           Boolean
+  error        String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ─── Platform ─────────────────────────────────────────────────────────────
+
+/// Admin-editable settings (plan limits, beta flag, ...). Values are
+/// validated by the API, which falls back to defaults when a row is missing.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// "Not listed" entries typed in the Mini App, resolved once to taxonomy ids and reused.
+/// Also shows which degrees/professions to add to the taxonomy (high `hits`, few `ids`).
+model TermMapping {
+  id        String   @id @default(uuid())
+  // field | profession
+  kind      String
+  // Normalized typed text (lowercase, single spaces).
+  term      String
+  // Matched taxonomy ids (empty = nothing close).
+  ids       String[] @default([])
+  // How it was resolved: local (fuzzy match, free) | ai | none
+  source    String
+  hits      Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, term])
+  @@index([kind, hits])
+}
+
+/// A CV made in the Mini App (generated by the GoMoxie engine). Base CVs are the
+/// person's own; tailored ones are rewritten for one job.
+model CvDocument {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  // base | tailored
+  kind          String
+  // create | improve | tailor
+  flow          String
+  // Tailored CVs: the job and the base CV they were made from.
+  jobId         String?
+  baseCvId      String?
+  templateId    String
+  // CVContent (GoMoxie's canonical shape).
+  content       Json
+  // How it was paid for: free_base | taster | plan | purchase | locked (made, must be paid to download).
+  charge        String
+  // While locked: which one-time product unlocks it (cv_new | cv_tailor).
+  lockedProduct String?
+  unlockedAt    DateTime?
+  /// Deleted by the person: hidden, but still counts toward free and plan CV usage.
+  deletedAt     DateTime?
+  // From the engine: job-fit gaps and follow-up questions (shown in the editor).
+  jobAnalysis   Json?
+  questions     Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, createdAt])
+}

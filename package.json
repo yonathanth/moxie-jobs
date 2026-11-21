@@ -1,0 +1,20 @@
+{
+  "name": "ethio-jobs",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @ethio/db generate",
+    "db:migrate:deploy": "pnpm --filter @ethio/db migrate:deploy",
+    "db:migrate:status": "pnpm --filter @ethio/db migrate:status",
+    "db:seed": "pnpm --filter @ethio/db seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.3"
+  }
+}

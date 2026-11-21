@@ -1,0 +1,27 @@
+# Production on the VPS. The web app is deployed to Vercel.
+#   cp .env.example .env   # fill in production values (BOT_MODE=webhook, https URLs, ALLOW_DEV_AUTH=false)
+#   docker compose up -d --build
+#   docker compose run --rm migrate   # apply new migrations
+services:
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:4000:4000" # reverse proxy (Caddy/Nginx) terminates TLS in front
+    restart: unless-stopped
+
+  worker:
+    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  migrate:
+    profiles: [tools]
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    env_file: .env
+    command: ["npx", "--yes", "prisma@6.19.3", "migrate", "deploy", "--schema", "prisma/schema.prisma"]
+

@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/*
+ * GoMoxie look (same tokens as gomoxie.app): off-white page, white cards with
+ * hairline borders, near-black primary actions, one vivid orange used sparingly.
+ * Light only, like GoMoxie; the Mini App sets Telegram's header/background to match.
+ */
+:root {
+  --bg: #fdfdfd;
+  --surface: #ffffff;
+  --text: #0f1115;
+  --hint: #6b7280;
+  --hint-light: #9ca3af;
+  --separator: #e6e8eb;
+  --separator-subtle: #f0f1f3;
+  --pill: #f3f4f6;
+  /* Primary actions and selected states (GoMoxie's light-theme buttons). */
+  --ink: #0f1115;
+  --ink-hover: #262626;
+  /* Brand accent: orange for highlights, badges, progress. */
+  --accent-strong: #e2470b;
+  --accent: #ff5e1f;
+  --accent-mid: #ff7a2e;
+  --accent-light: #ff9b60;
+  --accent-border: #ffc7a8;
+  --accent-soft: #fff2eb;
+  --accent-text: #ffffff;
+  --emerald: #10b981;
+  --emerald-soft: #ecfdf5;
+  --emerald-border: #a7f3d0;
+  --link: #e2470b;
+  --danger: #dc2626;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-hint: var(--hint);
+  --color-hint-light: var(--hint-light);
+  --color-separator: var(--separator);
+  --color-separator-subtle: var(--separator-subtle);
+  --color-pill: var(--pill);
+  --color-ink: var(--ink);
+  --color-ink-hover: var(--ink-hover);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-mid: var(--accent-mid);
+  --color-accent-light: var(--accent-light);
+  --color-accent-border: var(--accent-border);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-emerald: var(--emerald);
+  --color-emerald-soft: var(--emerald-soft);
+  --color-emerald-border: var(--emerald-border);
+  --color-link: var(--link);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Ethiopic", sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Subtle dot grid behind hero areas (as on gomoxie.app). */
+.bg-grid-pattern {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  /* none, not translateY(0): a leftover transform would pin position:fixed children (bottom bar, sticky buttons) to the page. */
+  to { opacity: 1; transform: none; }
+}
+.animate-fade-up {
+  animation: fade-up 0.32s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up { animation: none; }
+}
+
+/* Loading placeholders: a soft light sweep over grey blocks. */
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #eef0f2 25%, #f7f8f9 37%, #eef0f2 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0.6; }
+  to { transform: none; opacity: 1; }
+}

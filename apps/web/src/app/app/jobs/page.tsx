@@ -1,0 +1,303 @@
+"use client";
+
+import clsx from "clsx";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { ChevronRight, Lock, Search, SlidersHorizontal, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ScreenSkeleton } from "@/components/skeletons";
+import { EMPLOYMENT_TYPES, type FeedScope } from "@ethio/shared";
+import { BottomNav } from "@/components/BottomNav";
+import { FilterSheet } from "@/components/jobs/FilterSheet";
+import { JobCard, JobCardSkeleton } from "@/components/jobs/JobCard";
+import {
+  activeFilterCount,
+  EMPLOYER_FILTER_LABEL,
+  EMPTY_FILTERS,
+  feedStateToParams,
+  parseFeedState,
+  POSTED_LABEL,
+  toQuery,
+  type FeedState,
+} from "@/components/jobs/filters";
+import { MAX_FEED_ITEMS, useJob, useJobFeed, useTaxonomy } from "@/components/miniapp/hooks";
+import { useSession } from "@/components/miniapp/session";
+import { usePaywall } from "@/components/paywall";
+import { Button, Chip, IconTile, Spinner } from "@/components/ui";
+import { haptic } from "@/lib/telegram";
+
+export default function JobsPage() {
+  return (
+    <Suspense
+      fallback={
+        <ScreenSkeleton variant="jobs" />
+      }
+    >
+      <Feed />
+    </Suspense>
+  );
+}
+
+function Feed() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { me } = useSession();
+  const taxonomy = useTaxonomy();
+  const paywall = usePaywall();
+  const state = useMemo(() => parseFeedState(new URLSearchParams(params.toString())), [params]);
+  const [qInput, setQInput] = useState(state.q);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const update = (patch: Partial<FeedState>) => {
+    const next = feedStateToParams({ ...state, ...patch });
+    router.replace(next ? `/app/jobs?${next}` : "/app/jobs", { scroll: false });
+  };
+
+  // Debounced search: the URL (and the query) change 350 ms after typing stops.
+  useEffect(() => {
+    if (qInput === state.q) return;
+    const t = setTimeout(() => update({ q: qInput }), 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qInput]);
+
+  useEffect(() => {
+    if (!me.onboarded) router.replace("/app/onboarding");
+  }, [me.onboarded, router]);
+
+  const feed = useJobFeed(toQuery(state));
+  const similarJob = useJob(state.similar ?? "", !!state.similar);
+  const items = useMemo(() => feed.data?.pages.flatMap((p) => p.items) ?? [], [feed.data]);
+  const lockedCount = feed.data?.pages[0]?.lockedCount ?? 0;
+  const filterCount = activeFilterCount(state);
+  const cityName = useMemo(() => new Map((taxonomy.data?.cities ?? []).map((c) => [c.id, c.name])), [taxonomy.data]);
+
+  // Window virtualization: only the cards near the viewport are in the DOM.
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useLayoutEffect(() => {
+    setScrollMargin(listRef.current?.offsetTop ?? 0);
+  }, [lockedCount, filterCount, state.scope, feed.isPending]);
+  const virtualizer = useWindowVirtualizer({
+    count: items.length,
+    estimateSize: () => 150,
+    overscan: 6,
+    gap: 12,
+    scrollMargin,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+
+  // Infinite scroll: fetch the next page when the last few cards come into view.
+  const lastIndex = virtualItems[virtualItems.length - 1]?.index ?? -1;
+  useEffect(() => {
+    if (lastIndex >= items.length - 6 && feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage();
+  }, [lastIndex, items.length, feed]);
+
+  const setScope = (scope: FeedScope) => {
+    if (scope === state.scope) return;
+    haptic.select();
+    window.scrollTo({ top: 0 });
+    update({ scope });
+  };
+
+  const activeChips: { key: string; label: string; clear: () => void }[] = [
+    ...(state.similar ? [{ key: "similar", label: similarJob.data ? `Similar to: ${similarJob.data.title}` : "Similar jobs", clear: () => update({ similar: null }) }] : []),
+    ...state.cities.map((id) => ({ key: `c:${id}`, label: cityName.get(id) ?? id, clear: () => update({ cities: state.cities.filter((x) => x !== id) }) })),
+    ...state.types.map((id) => ({
+      key: `t:${id}`,
+      label: EMPLOYMENT_TYPES.find((t) => t.id === id)?.label ?? id,
+      clear: () => update({ types: state.types.filter((x) => x !== id) }),
+    })),
+    ...state.employers.map((id) => ({ key: `e:${id}`, label: EMPLOYER_FILTER_LABEL[id], clear: () => update({ employers: state.employers.filter((x) => x !== id) }) })),
+    ...(state.remote ? [{ key: "remote", label: "Remote", clear: () => update({ remote: false }) }] : []),
+    ...(state.posted ? [{ key: "posted", label: POSTED_LABEL[state.posted], clear: () => update({ posted: null }) }] : []),
+    ...(state.closing ? [{ key: "closing", label: "Closing soon", clear: () => update({ closing: false }) }] : []),
+    ...(state.salary ? [{ key: "salary", label: "Shows salary", clear: () => update({ salary: false }) }] : []),
+  ];
+
+  return (
+    <main className="mx-auto w-full max-w-lg pb-28">
+      <div className="sticky top-0 z-10 border-b border-separator-subtle bg-bg/95 px-4 pb-3 pt-4 backdrop-blur">
+        <div className="flex items-center justify-between px-1">
+          <h1 className="text-[26px] font-bold tracking-tight">Jobs</h1>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-separator bg-surface p-1">
+          {(["for_you", "all"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setScope(s)}
+              className={clsx("rounded-lg py-2 text-sm font-semibold transition-colors", state.scope === s ? "bg-ink text-white" : "text-hint")}
+            >
+              {s === "for_you" ? "For you" : "All jobs"}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <label className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-hint-light" />
+            <input
+              type="search"
+              value={qInput}
+              onChange={(e) => setQInput(e.target.value)}
+              placeholder="Search title, company or skill"
+              enterKeyHint="search"
+              className="h-11 w-full rounded-xl border border-separator bg-surface pl-9 pr-9 text-[15px] outline-none transition-colors placeholder:text-hint-light focus:border-ink"
+            />
+            {qInput && (
+              <button type="button" aria-label="Clear search" onClick={() => setQInput("")} className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center text-hint">
+                <X className="size-4" />
+              </button>
+            )}
+          </label>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen(true)}
+            aria-label="Filters"
+            className={clsx(
+              "relative grid size-11 shrink-0 place-items-center rounded-xl border transition-colors",
+              filterCount ? "border-ink bg-ink text-white" : "border-separator bg-surface text-text",
+            )}
+          >
+            <SlidersHorizontal className="size-4" />
+            {filterCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-bold text-white">{filterCount}</span>
+            )}
+          </button>
+        </div>
+        {activeChips.length > 0 && (
+          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
+            {activeChips.map((c) => (
+              <span key={c.key} className="shrink-0">
+                <Chip onRemove={c.clear}>{c.label}</Chip>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 pt-4">
+        {state.scope === "for_you" && lockedCount > 0 && (
+          <button type="button" onClick={() => paywall.gate("premium_job")} className="mb-3 block w-full text-left">
+            <div className="flex items-center gap-3 rounded-2xl border border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#fffaf6_60%,#ffffff_100%)] p-4">
+              <IconTile>
+                <Lock className="size-5" />
+              </IconTile>
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-semibold">
+                  {lockedCount} premium {lockedCount === 1 ? "match" : "matches"} this week
+                </p>
+                <p className="text-[13px] text-hint">NGO, international & overseas jobs come with Pro</p>
+              </div>
+              <ChevronRight className="size-5 text-accent-strong" />
+            </div>
+          </button>
+        )}
+
+        {feed.isPending ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 5 }, (_, i) => (
+              <JobCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : feed.isError ? (
+          <div className="py-16 text-center">
+            <p className="font-semibold">Couldn&apos;t load jobs</p>
+            <p className="mt-1 text-sm text-hint">{feed.error.message}</p>
+            <div className="mx-auto mt-4 max-w-xs">
+              <Button onClick={() => void feed.refetch()}>Try again</Button>
+            </div>
+          </div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            scope={state.scope}
+            filtered={filterCount > 0 || !!state.q}
+            onClear={() => {
+              setQInput("");
+              update({ ...EMPTY_FILTERS, q: "" });
+            }}
+            onBrowse={() => setScope("all")}
+          />
+        ) : (
+          <div ref={listRef} className={clsx("transition-opacity", feed.isPlaceholderData && "opacity-60")}>
+            <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+              {virtualItems.map((v) => (
+                <div
+                  key={items[v.index]!.id}
+                  data-index={v.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute inset-x-0 top-0"
+                  style={{ transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
+                >
+                  <JobCard job={items[v.index]!} />
+                </div>
+              ))}
+            </div>
+            <div className="py-6 text-center text-[13px] text-hint">
+              {feed.isFetchingNextPage ? (
+                <span className="inline-flex items-center gap-2">
+                  <Spinner />
+                </span>
+              ) : feed.hasNextPage ? null : items.length >= MAX_FEED_ITEMS ? (
+                "That's the latest " + MAX_FEED_ITEMS + ". Search or filter to find more."
+              ) : (
+                "You're all caught up."
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {filtersOpen && taxonomy.data && (
+        <FilterSheet
+          value={state}
+          cities={taxonomy.data.cities}
+          onClose={() => setFiltersOpen(false)}
+          onApply={(f) => {
+            setFiltersOpen(false);
+            window.scrollTo({ top: 0 });
+            update(f);
+          }}
+        />
+      )}
+      <BottomNav />
+    </main>
+  );
+}
+
+function EmptyState({ scope, filtered, onClear, onBrowse }: { scope: FeedScope; filtered: boolean; onClear: () => void; onBrowse: () => void }) {
+  if (filtered) {
+    return (
+      <div className="py-16 text-center">
+        <p className="font-semibold">No jobs match these filters</p>
+        <p className="mt-1 text-sm text-hint">Try fewer filters or another word.</p>
+        <div className="mx-auto mt-4 max-w-xs">
+          <Button variant="secondary" onClick={onClear}>
+            Clear search and filters
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (scope === "for_you") {
+    return (
+      <div className="py-16 text-center">
+        <p className="font-semibold">No matches yet</p>
+        <p className="mx-auto mt-1 max-w-xs text-sm text-hint">Jobs that fit your preferences show up here as soon as they&apos;re posted.</p>
+        <div className="mx-auto mt-4 flex max-w-xs flex-col gap-2">
+          <Button onClick={onBrowse}>Browse all jobs</Button>
+          <Link href="/app/preferences" className="text-sm font-semibold text-accent-strong">
+            Edit preferences
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="py-16 text-center">
+      <p className="font-semibold">No open jobs right now</p>
+      <p className="mt-1 text-sm text-hint">New jobs are added around the clock.</p>
+    </div>
+  );
+}

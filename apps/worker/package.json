@@ -1,0 +1,33 @@
+{
+  "name": "@ethio/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "tg:login": "tsx src/scripts/tg-login.ts",
+    "sources": "tsx src/scripts/sources.ts",
+    "extract:try": "tsx src/scripts/try-extract.ts"
+  },
+  "dependencies": {
+    "@ethio/db": "workspace:*",
+    "@ethio/shared": "workspace:*",
+    "cheerio": "^1.1.2",
+    "dotenv": "^17.2.3",
+    "openai": "^6.7.0",
+    "pino": "^9.13.1",
+    "robots-parser": "^3.0.1",
+    "telegram": "^2.26.22",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "pino-pretty": "^13.1.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
