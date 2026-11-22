@@ -42,7 +42,7 @@ jobs:
 
             # The server's .env (not in git) holds every setting.
             if [ ! -f .env ]; then
-              echo "Missing ~/apps/moxie-jobs/.env (copy .env.example and fill in production values)"
+              echo "Missing ~/apps/moxie-jobs/.env: copy .env.production.example from the repo and fill it in (see docs/DEPLOY.md)"
               exit 1
             fi
             # The web app reads its NEXT_PUBLIC_* values at build time.
