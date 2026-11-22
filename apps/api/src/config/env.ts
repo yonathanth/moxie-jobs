@@ -94,7 +94,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       }
     }
   }
-  const parsed = envSchema.safeParse(source);
+  // A blank "KEY=" line in .env means "not set" (optional settings stay optional).
+  const values = Object.fromEntries(Object.entries(source).filter(([, v]) => v !== ""));
+  const parsed = envSchema.safeParse(values);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment:\n${issues}`);

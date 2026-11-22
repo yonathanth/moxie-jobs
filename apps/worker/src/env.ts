@@ -68,7 +68,9 @@ export function env(): Env {
       break;
     }
   }
-  const parsed = schema.safeParse(process.env);
+  // A blank "KEY=" line in .env means "not set".
+  const values = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ""));
+  const parsed = schema.safeParse(values);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment:\n${issues}`);
