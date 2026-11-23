@@ -51,7 +51,7 @@ export const settingsUpdateSchema = z
       .strict(),
     prices: z.object(Object.fromEntries(PAID_PLANS.map((p) => [p, priceRow]))).strict(),
     planLimits: z.object(Object.fromEntries(PLANS.map((p) => [p, limitsSchema]))).strict(),
-    cvPrices: z.object({ cv_new: z.number().int().min(1).max(100_000), cv_tailor: z.number().int().min(1).max(100_000) }).strict(),
+    cvPackPrices: z.object({ cv_pack_s: z.number().int().min(1).max(100_000), cv_pack_m: z.number().int().min(1).max(100_000), cv_pack_l: z.number().int().min(1).max(100_000) }).strict(),
     unpaidCvCap: z.number().int().min(0).max(20),
   })
   .partial()

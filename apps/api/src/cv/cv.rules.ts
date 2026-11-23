@@ -2,7 +2,7 @@ import { CV_FAIR_USE_PER_MONTH, type CvContent, type CvProduct, type PlanLimits 
 
 /** Pure CV rules: what a new CV costs, and text for the engine. Unit-tested. */
 
-export type CvCharge = "free_base" | "taster" | "plan" | "locked";
+export type CvCharge = "free_base" | "taster" | "plan" | "credit" | "locked";
 
 export interface ChargeInput {
   flow: "create" | "improve" | "tailor";
@@ -13,6 +13,8 @@ export interface ChargeInput {
   limits: Pick<PlanLimits, "cvNewPerMonth" | "cvTailorPerMonth">;
   /** CVs made from the plan allowance in the last 30 days. */
   usedThisMonth: { new: number; tailor: number };
+  /** CV pack credits left. */
+  credits?: { new: number; tailor: number };
   unpaidCount: number;
   unpaidCap: number;
 }
@@ -27,14 +29,15 @@ export function allowanceLeft(perMonth: number | null, used: number): number | n
 
 /**
  * Order: the free base CV (started from a job, no CV yet) → the one free
- * tailoring → the plan's allowance → "make now, pay to download" (locked),
- * unless they already have the maximum number of unpaid CVs.
+ * tailoring → the plan's allowance → a CV pack credit → "make now, unlock later"
+ * (locked), unless they already have the maximum number of unpaid CVs.
  */
 export function decideCharge(c: ChargeInput): ChargeDecision {
   if (c.flow !== "tailor" && c.freeBase) return { charge: "free_base" };
   if (c.flow === "tailor" && !c.tasterUsed) return { charge: "taster" };
   const left = c.flow === "tailor" ? allowanceLeft(c.limits.cvTailorPerMonth, c.usedThisMonth.tailor) : allowanceLeft(c.limits.cvNewPerMonth, c.usedThisMonth.new);
   if (left === null || left > 0) return { charge: "plan" };
+  if (((c.flow === "tailor" ? c.credits?.tailor : c.credits?.new) ?? 0) > 0) return { charge: "credit" };
   if (c.unpaidCount >= c.unpaidCap) return { blocked: "unpaid_cap" };
   return { charge: "locked", product: c.flow === "tailor" ? "cv_tailor" : "cv_new" };
 }

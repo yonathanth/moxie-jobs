@@ -19,7 +19,12 @@ describe("decideCharge", () => {
   it("the first tailoring is free for everyone", () => {
     expect(decideCharge({ ...base, flow: "tailor", tasterUsed: false })).toEqual({ charge: "taster" });
   });
-  it("Free: made now, pay to download (49 new, 19 tailored)", () => {
+  it("pack credits are used after the plan allowance, by kind", () => {
+    expect(decideCharge({ ...base, credits: { new: 1, tailor: 0 } })).toEqual({ charge: "credit" });
+    expect(decideCharge({ ...base, flow: "tailor", credits: { new: 1, tailor: 0 } })).toEqual({ charge: "locked", product: "cv_tailor" });
+    expect(decideCharge({ ...base, flow: "tailor", credits: { new: 0, tailor: 3 } })).toEqual({ charge: "credit" });
+  });
+  it("Free with no credits: made now, unlocked later with a pack", () => {
     expect(decideCharge(base)).toEqual({ charge: "locked", product: "cv_new" });
     expect(decideCharge({ ...base, flow: "improve" })).toEqual({ charge: "locked", product: "cv_new" });
     expect(decideCharge({ ...base, flow: "tailor" })).toEqual({ charge: "locked", product: "cv_tailor" });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BILLING_PERIODS, PAID_PLANS, PLANS, type Plan } from "./enums";
-import { DEFAULT_CV_PRICES, DEFAULT_PLAN_LIMITS, DEFAULT_PRICES, MAX_LIMITS, type CvProduct, type PlanLimits, type PriceTable } from "./plans";
+import { CV_PACK_CONTENTS, CV_PACKS, DEFAULT_CV_PACK_PRICES, DEFAULT_CV_PRICES, DEFAULT_PLAN_LIMITS, DEFAULT_PRICES, MAX_LIMITS, type CvProduct, type PlanLimits, type PriceTable } from "./plans";
 
 /**
  * Admin-editable platform settings (Setting table, one row per key). Every key
@@ -31,7 +31,10 @@ export const settingsSchema = z.object({
     })
     .default({ maxJobAgeHours: 48, teaserHourEat: 18, quietFromEat: 22, quietToEat: 7 }),
   /** One-time CV prices (ETB) and how many unpaid (locked) CVs a person may have at once. */
+  /** Deprecated (CVs aren't sold one by one any more); kept so old rows still parse. */
   cvPrices: z.object({ cv_new: z.number().int().min(1).max(100_000), cv_tailor: z.number().int().min(1).max(100_000) }).partial().default({}),
+  /** ETB per CV pack. Partial overrides are merged over DEFAULT_CV_PACK_PRICES. */
+  cvPackPrices: z.object({ cv_pack_s: z.number().int().min(1).max(100_000), cv_pack_m: z.number().int().min(1).max(100_000), cv_pack_l: z.number().int().min(1).max(100_000) }).partial().default({}),
   unpaidCvCap: z.number().int().min(0).max(20).default(2),
   /** Unpaid / volunteer roles: sent with a clear label, or excluded everywhere. */
   unpaidJobs: z.enum(["label", "exclude"]).default("label"),
@@ -93,4 +96,14 @@ export function effectivePlan(
   // Beta: everyone gets Pro; a paid Career plan still wins (above).
   if (settings.betaAllPro) return "pro";
   return "free";
+}
+
+export function resolveCvPackPrices(settings: Settings): Record<(typeof CV_PACKS)[number], number> {
+  return { ...DEFAULT_CV_PACK_PRICES, ...settings.cvPackPrices };
+}
+
+/** The packs as sold, with live prices. */
+export function cvPacks(settings: Settings): { id: (typeof CV_PACKS)[number]; name: string; price: number; newCvs: number; tailored: number }[] {
+  const prices = resolveCvPackPrices(settings);
+  return CV_PACKS.map((id) => ({ id, ...CV_PACK_CONTENTS[id], price: prices[id] }));
 }

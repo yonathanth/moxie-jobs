@@ -1,11 +1,11 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { ScreenSkeleton } from "../skeletons";
 import type { MeDto } from "@ethio/shared";
 import { api, ApiError } from "@/lib/api";
 import { BOT_URL, DEV_AUTH, DEV_TELEGRAM_ID } from "@/lib/config";
-import { getWebApp } from "@/lib/telegram";
+import { initDataUserId, readInitData } from "@/lib/telegram";
 import { Button, CenteredMessage } from "../ui";
 
 interface Session {
@@ -28,27 +28,57 @@ type State =
   | { status: "error"; message: string }
   | { status: "ready"; token: string; me: MeDto };
 
-/** Signs the user in with Telegram initData (or dev login) before rendering the Mini App. */
-export function SessionGate({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<State>({ status: "loading" });
+const CACHE_KEY = "mj:session";
+/** Tokens live 24 h; a cached session is reused for 20 h, then a fresh sign-in is awaited. */
+const CACHE_MAX_AGE_MS = 20 * 3_600_000;
 
-  const signIn = useCallback(async () => {
-    setState({ status: "loading" });
-    const wa = getWebApp();
-    if (wa) {
-      wa.ready();
-      wa.expand();
-      wa.disableVerticalSwipes?.();
-      // Match the GoMoxie page colour so Telegram's chrome blends in.
-      wa.setHeaderColor?.("#fdfdfd");
-      wa.setBackgroundColor?.("#fdfdfd");
-      wa.setBottomBarColor?.("#fdfdfd");
-    }
+interface CachedSession {
+  uid: number;
+  token: string;
+  me: MeDto;
+  at: number;
+}
+
+function loadCached(uid: number | null): CachedSession | null {
+  if (uid === null) return null;
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "null") as CachedSession | null;
+    return c && c.uid === uid && Date.now() - c.at < CACHE_MAX_AGE_MS ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCached(uid: number | null, token: string, me: MeDto) {
+  if (uid === null) return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ uid, token, me, at: Date.now() } satisfies CachedSession));
+  } catch {}
+}
+
+/**
+ * Signs the user in with Telegram initData (or dev login) before rendering the Mini App.
+ * Fast path: initData is read from the URL before Telegram's script loads, and a session cached
+ * on this device (same Telegram user) renders at once while a fresh sign-in runs in the background.
+ */
+export function SessionGate({ scriptReady, children }: { scriptReady: boolean; children: React.ReactNode }) {
+  const [state, setState] = useState<State>({ status: "loading" });
+  const started = useRef(false);
+
+  const signIn = useCallback(async (initData: string | null) => {
+    const uid = initData ? initDataUserId(initData) : null;
+    const cached = loadCached(uid);
+    setState(cached ? { status: "ready", token: cached.token, me: cached.me } : { status: "loading" });
     try {
-      const res = wa ? await api.loginTelegram(wa.initData) : DEV_AUTH ? await api.loginDev(DEV_TELEGRAM_ID) : null;
-      if (!res) return setState({ status: "outside-telegram" });
+      const res = initData ? await api.loginTelegram(initData) : DEV_AUTH ? await api.loginDev(DEV_TELEGRAM_ID) : null;
+      if (!res) {
+        if (!cached) setState({ status: "outside-telegram" });
+        return;
+      }
+      saveCached(uid, res.accessToken, res.me);
       setState({ status: "ready", token: res.accessToken, me: res.me });
     } catch (err) {
+      if (cached) return; // keep the cached session; it's still valid
       const message =
         err instanceof ApiError && err.status === 401
           ? "Your Telegram session expired. Close and reopen the app."
@@ -59,12 +89,24 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Start as soon as there's initData (usually right away, from the URL); otherwise wait for the script.
   useEffect(() => {
-    void signIn();
-  }, [signIn]);
+    if (started.current) return;
+    const initData = readInitData();
+    if (initData || scriptReady) {
+      started.current = true;
+      void signIn(initData);
+    }
+  }, [scriptReady, signIn]);
 
   const setMe = useCallback(
-    (me: MeDto) => setState((s) => (s.status === "ready" ? { ...s, me } : s)),
+    (me: MeDto) =>
+      setState((s) => {
+        if (s.status !== "ready") return s;
+        const initData = readInitData();
+        if (initData) saveCached(initDataUserId(initData), s.token, me);
+        return { ...s, me };
+      }),
     [],
   );
 
@@ -87,7 +129,7 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
     case "error":
       return (
         <CenteredMessage title="Couldn't sign you in" body={state.message}>
-          <Button onClick={() => void signIn()}>Try again</Button>
+          <Button onClick={() => void signIn(readInitData())}>Try again</Button>
         </CenteredMessage>
       );
     case "ready":

@@ -7,14 +7,17 @@ import {
   PLAN_RANK,
   CV_PRODUCTS,
   PLANS,
-  resolveCvPrices,
   resolveLimits,
   resolvePrices,
-  type CvProduct,
   type CheckoutRequest,
   type CheckoutResponse,
   type PaymentDto,
   type PricingDto,
+  CV_PACKS,
+  CV_PACK_CONTENTS,
+  cvPacks,
+  resolveCvPackPrices,
+  type CvPackId,
 } from "@ethio/shared";
 import { BotService } from "../bot/bot.service";
 import { CvService } from "../cv/cv.service";
@@ -52,7 +55,7 @@ export class BillingService {
   async pricing(): Promise<PricingDto> {
     const settings = await this.settings.get();
     const limits = Object.fromEntries(PLANS.map((p) => [p, resolveLimits(p, settings)])) as Record<(typeof PLANS)[number], typeof DEFAULT_PLAN_LIMITS.free>;
-    return { currency: "ETB", prices: resolvePrices(settings), limits };
+    return { currency: "ETB", prices: resolvePrices(settings), limits, packs: cvPacks(settings) };
   }
 
   async checkout(user: User, req: CheckoutRequest): Promise<CheckoutResponse> {
@@ -68,18 +71,18 @@ export class BillingService {
     return this.startCheckout(payment, `Ethio Jobs ${PLAN_NAME[req.plan]} (${PERIOD_LABEL[req.period]})`);
   }
 
-  /** Pay to unlock a CV that was made on "pay at download" (49 Br new/improved, 19 Br tailored). */
-  async checkoutCv(user: User, cvId: string): Promise<CheckoutResponse> {
+  /** Buy a CV pack. With cvId, one of its credits unlocks that (locked) CV once paid. */
+  async checkoutPack(user: User, req: { pack: CvPackId; cvId?: string }): Promise<CheckoutResponse> {
     if (!this.client) throw new ServiceUnavailableException("Payments are not available right now");
-    const cv = await this.prisma.cvDocument.findUnique({ where: { id: cvId } });
-    if (!cv || cv.deletedAt || cv.userId !== user.id) throw new NotFoundException("CV not found");
-    if (cv.charge !== "locked" || !cv.lockedProduct) throw new ConflictException("This CV is already unlocked");
-    const product = cv.lockedProduct as CvProduct;
-    const amount = resolveCvPrices(await this.settings.get())[product];
+    if (req.cvId) {
+      const cv = await this.prisma.cvDocument.findUnique({ where: { id: req.cvId } });
+      if (!cv || cv.deletedAt || cv.userId !== user.id) throw new NotFoundException("CV not found");
+    }
+    const amount = resolveCvPackPrices(await this.settings.get())[req.pack];
     const payment = await this.prisma.payment.create({
-      data: { userId: user.id, plan: product, period: "one_time", amount, cvDocumentId: cv.id },
+      data: { userId: user.id, plan: req.pack, period: "one_time", amount, cvDocumentId: req.cvId ?? null },
     });
-    return this.startCheckout(payment, `Ethio Jobs ${product === "cv_tailor" ? "tailored CV" : "CV"}`);
+    return this.startCheckout(payment, `Moxie Jobs ${CV_PACK_CONTENTS[req.pack].name} CV pack`);
   }
 
   private async startCheckout(payment: Payment, reason: string): Promise<CheckoutResponse> {
@@ -175,6 +178,7 @@ export class BillingService {
   }
 
   private async activate(payment: Payment, remote: { santimPayTxnId?: string; paymentMethod?: string } | null): Promise<Payment> {
+    if ((CV_PACKS as readonly string[]).includes(payment.plan)) return this.activatePack(payment, remote);
     if ((CV_PRODUCTS as readonly string[]).includes(payment.plan)) return this.activateCv(payment, remote);
     const now = new Date();
     const result = await this.prisma.$transaction(async (tx) => {
@@ -206,7 +210,45 @@ export class BillingService {
     return result.updated;
   }
 
-  /** A paid CV unlock: the CV loses its watermark and the clean PDF goes to the person's chat. */
+  /** A paid CV pack: credits are added; if bought for a locked CV, one credit unlocks it and the clean PDF is sent. */
+  private async activatePack(payment: Payment, remote: { santimPayTxnId?: string; paymentMethod?: string } | null): Promise<Payment> {
+    const now = new Date();
+    const pack = CV_PACK_CONTENTS[payment.plan as CvPackId];
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.payment.updateMany({ where: { id: payment.id, status: "pending" }, data: { status: "paid", paidAt: now } });
+      if (claimed.count === 0) return null;
+      await tx.user.update({ where: { id: payment.userId }, data: { cvNewCredits: { increment: pack.newCvs }, cvTailorCredits: { increment: pack.tailored } } });
+      let unlockedCv: string | null = null;
+      if (payment.cvDocumentId) {
+        const cv = await tx.cvDocument.findFirst({ where: { id: payment.cvDocumentId, userId: payment.userId, charge: "locked", deletedAt: null } });
+        if (cv) {
+          const column = cv.lockedProduct === "cv_tailor" ? "cvTailorCredits" : "cvNewCredits";
+          await tx.user.update({ where: { id: payment.userId }, data: { [column]: { decrement: 1 } } });
+          await tx.cvDocument.update({ where: { id: cv.id }, data: { charge: "credit", lockedProduct: null, unlockedAt: now } });
+          unlockedCv = cv.id;
+        }
+      }
+      const updated = await tx.payment.update({
+        where: { id: payment.id },
+        data: { providerTxnId: remote?.santimPayTxnId ?? null, paymentVia: remote?.paymentMethod ?? null },
+      });
+      return { updated, unlockedCv };
+    });
+    if (!result) return (await this.prisma.payment.findUnique({ where: { id: payment.id } }))!;
+    this.logger.log(`payment ${payment.id} paid: user=${payment.userId} ${payment.plan}${result.unlockedCv ? ` unlocked CV ${result.unlockedCv}` : ""}`);
+    const user = await this.prisma.user.findUnique({ where: { id: payment.userId } });
+    if (user) {
+      await this.bot
+        .send(user, {
+          text: `<b>Your ${pack.name} CV pack is ready</b>\n\n${pack.newCvs} new or improved CVs and ${pack.tailored} tailored CVs. They never expire.`,
+        })
+        .catch((err: unknown) => this.logger.warn(`pack message failed: ${String(err)}`));
+      if (result.unlockedCv) await this.cvs.sendPdf(user, result.unlockedCv).catch((err: unknown) => this.logger.warn(`unlocked CV PDF not sent: ${String(err)}`));
+    }
+    return result.updated;
+  }
+
+  /** (Old single-CV payments.) A paid CV unlock: the CV loses its watermark and the clean PDF goes to the person's chat. */
   private async activateCv(payment: Payment, remote: { santimPayTxnId?: string; paymentMethod?: string } | null): Promise<Payment> {
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {

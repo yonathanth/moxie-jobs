@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { RowsSkeleton } from "@/components/skeletons";
-import { BILLING_PERIODS, PAID_PLANS, PERIOD_LABEL, PLAN_NAME, PLANS, type AdminSettingsDto, type PlanLimits } from "@ethio/shared";
+import { BILLING_PERIODS, CV_PACK_CONTENTS, CV_PACKS, PAID_PLANS, PERIOD_LABEL, PLAN_NAME, PLANS, type AdminSettingsDto, type PlanLimits } from "@ethio/shared";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useAdminSettings, useSaveSettings } from "@/components/admin/hooks";
 import { Button, Card, ErrorText, StickyFooter, Toggle } from "@/components/ui";
 import { haptic } from "@/lib/telegram";
 
-type Draft = Pick<AdminSettingsDto, "prices" | "planLimits" | "cvPrices" | "unpaidCvCap">;
-const pickDraft = (d: AdminSettingsDto): Draft => ({ prices: d.prices, planLimits: d.planLimits, cvPrices: d.cvPrices, unpaidCvCap: d.unpaidCvCap });
+type Draft = Pick<AdminSettingsDto, "prices" | "planLimits" | "cvPackPrices" | "unpaidCvCap">;
+const pickDraft = (d: AdminSettingsDto): Draft => ({ prices: d.prices, planLimits: d.planLimits, cvPackPrices: d.cvPackPrices, unpaidCvCap: d.unpaidCvCap });
 
 const LIMIT_ROWS: { key: keyof PlanLimits; label: string; max: number }[] = [
   { key: "maxProfessions", label: "Professions", max: 10 },
@@ -45,8 +45,8 @@ export default function PlansAdminPage() {
     setDraft((d) => d && { ...d, planLimits: { ...d.planLimits, [plan]: { ...d.planLimits[plan], ...patch } } });
   };
   const dirty = !settings.data || JSON.stringify(draft) !== JSON.stringify(pickDraft(settings.data));
-  const invalidPrice = PAID_PLANS.some((p) => BILLING_PERIODS.some((per) => draft.prices[p][per] < 1)) || draft.cvPrices.cv_new < 1 || draft.cvPrices.cv_tailor < 1;
-  const setCv = (patch: Partial<Pick<Draft, "cvPrices" | "unpaidCvCap">>) => {
+  const invalidPrice = PAID_PLANS.some((p) => BILLING_PERIODS.some((per) => draft.prices[p][per] < 1)) || CV_PACKS.some((k) => draft.cvPackPrices[k] < 1);
+  const setCv = (patch: Partial<Pick<Draft, "cvPackPrices" | "unpaidCvCap">>) => {
     setSaved(false);
     setDraft((d) => d && { ...d, ...patch });
   };
@@ -71,14 +71,20 @@ export default function PlansAdminPage() {
       </section>
 
       <section className="mt-5">
-        <h2 className="mb-2 px-1 text-[15px] font-semibold">Pay per CV (ETB)</h2>
+        <h2 className="mb-2 px-1 text-[15px] font-semibold">CV packs (ETB)</h2>
         <Card>
-          <div className="grid grid-cols-3 gap-3">
-            <NumberField label="New / improved" value={draft.cvPrices.cv_new} onChange={(n) => setCv({ cvPrices: { ...draft.cvPrices, cv_new: n ?? 0 } })} />
-            <NumberField label="Tailored" value={draft.cvPrices.cv_tailor} onChange={(n) => setCv({ cvPrices: { ...draft.cvPrices, cv_tailor: n ?? 0 } })} />
+          <div className="grid grid-cols-2 gap-3">
+            {CV_PACKS.map((k) => (
+              <NumberField
+                key={k}
+                label={`${CV_PACK_CONTENTS[k].name} (${CV_PACK_CONTENTS[k].newCvs} new + ${CV_PACK_CONTENTS[k].tailored} tailored)`}
+                value={draft.cvPackPrices[k]}
+                onChange={(n) => setCv({ cvPackPrices: { ...draft.cvPackPrices, [k]: n ?? 0 } })}
+              />
+            ))}
             <NumberField label="Max unpaid CVs" value={draft.unpaidCvCap} max={20} onChange={(n) => setCv({ unpaidCvCap: n ?? 0 })} />
           </div>
-          <p className="mt-2 text-[12px] text-hint">Used after a plan&apos;s monthly CVs run out. People see the CV first and pay to download the clean PDF.</p>
+          <p className="mt-2 text-[12px] text-hint">Credits never expire and are used after a plan&apos;s monthly CVs run out. Without credits, people see the CV first and unlock it with a pack.</p>
         </Card>
       </section>
 

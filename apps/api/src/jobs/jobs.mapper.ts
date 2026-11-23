@@ -13,6 +13,7 @@ import {
   salaryText,
   type EmployerFilter,
   type JobCardDto,
+  type PublicJobDto,
 } from "@ethio/shared";
 
 /** Pure feed helpers: DTO mapping (with premium redaction), cursors, filter mapping. Unit-tested. */
@@ -21,6 +22,8 @@ export interface CardContext {
   /** The user's plan includes premium jobs. */
   premiumJobs: boolean;
   match: JobCardDto["match"];
+  /** The user bookmarked it. */
+  saved?: boolean;
   fieldNames: ReadonlyMap<string, string>;
   sourceTitles: ReadonlyMap<string, string>;
 }
@@ -32,6 +35,8 @@ export function toCard(job: Job, ctx: CardContext): JobCardDto {
     title: job.title,
     locked,
     match: ctx.match,
+    saved: ctx.saved ?? false,
+    functionId: job.functionId,
     employerType: job.employerType,
     employerLabel: employerLabel(job.employerType) ?? (job.isOverseas ? "Abroad" : null),
     location: locationText(job),
@@ -77,6 +82,47 @@ export function toCard(job: Job, ctx: CardContext): JobCardDto {
     sourceTitle: ctx.sourceTitles.get(job.primarySourceId) ?? null,
     sourceUrl: /^https?:\/\//i.test(job.sourceUrl) ? job.sourceUrl : null,
   };
+}
+
+/** First sentences of a summary, at most ~max chars, cut at a sentence or word boundary. */
+export function teaserOf(summary: string, max = 220): string {
+  const text = summary.replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const sentence = cut.lastIndexOf(". ");
+  if (sentence > max * 0.4) return cut.slice(0, sentence + 1);
+  return cut.slice(0, cut.lastIndexOf(" ")).replace(/[,;:]$/, "") + "…";
+}
+
+/** A shared job link (public). Premium jobs show only what a locked card shows. Never includes how to apply. */
+export function toPublic(job: Job, now = new Date()): PublicJobDto {
+  const premium = isPremiumJob(job);
+  return {
+    id: job.id,
+    title: job.title,
+    company: premium ? null : job.company,
+    employerLabel: employerLabel(job.employerType) ?? (job.isOverseas ? "Abroad" : null),
+    location: locationText(job),
+    jobType: jobTypeText(job.employmentType, job.positions),
+    experience: premium ? null : experienceText(job.experienceMin, job.experienceMax),
+    salary: premium ? null : salaryText(job.salaryRaw, job.qualityFlags.includes("unpaid")),
+    deadline: job.deadline?.toISOString() ?? null,
+    firstSeenAt: job.firstSeenAt.toISOString(),
+    teaser: premium ? null : teaserOf(job.summary),
+    skills: premium ? [] : job.skills.slice(0, 6),
+    closed: job.status === "expired" || (job.deadline !== null && job.deadline <= now),
+  };
+}
+
+/**
+ * Moves `pins` to the given positions (in order), removing them from wherever they were in `items`.
+ * Positions past the end append. Used to show locked premium matches 1st and 3rd.
+ */
+export function pinAt<T>(items: T[], pins: T[], positions: number[], key: (t: T) => string): T[] {
+  const pinned = new Set(pins.map(key));
+  const out = items.filter((i) => !pinned.has(key(i)));
+  pins.slice(0, positions.length).forEach((p, i) => out.splice(Math.min(positions[i]!, out.length), 0, p));
+  return out;
 }
 
 /** Keyset cursor: (sort time, id), newest first. Opaque base64url to the client. */

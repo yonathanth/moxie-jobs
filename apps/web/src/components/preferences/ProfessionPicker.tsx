@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Check, ChevronRight, Layers, Loader2, Lock, Plus } from "lucide-react";
+import { Check, ChevronDown, Loader2, Plus } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { PlanLimits, ProfessionDto, TaxonomyDto } from "@ethio/shared";
@@ -50,17 +50,27 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
   };
 
   const toggleProfession = (id: string) => {
+    const fn = byId.get(id)?.functionId;
+    // Narrowing down: picking a role inside a followed category switches that category to specific roles.
+    if (fn && functionIds.includes(fn)) {
+      if (professionsFull) return blocked("professions");
+      haptic.select();
+      return onChange({ professionIds: [...professionIds, id], functionIds: functionIds.filter((f) => f !== fn) });
+    }
     if (!professionIds.includes(id) && professionsFull) return blocked("professions");
     haptic.select();
     onChange({ professionIds: toggle(professionIds, id), functionIds });
   };
+  /** The default action: follow every job in a category (its specific roles fold into it). */
   const toggleFunction = (id: string) => {
-    if (!functionIds.includes(id) && (categoriesLocked || functionsFull)) return blocked("categories");
+    if (functionIds.includes(id)) {
+      haptic.select();
+      return onChange({ professionIds, functionIds: functionIds.filter((f) => f !== id) });
+    }
+    if (categoriesLocked || functionsFull) return blocked("categories");
     haptic.select();
-    const adding = !functionIds.includes(id);
-    onChange({ professionIds, functionIds: toggle(functionIds, id) });
-    // Following the whole category covers every role in it: fold the list away.
-    if (adding) setOpenFunction(null);
+    const inside = new Set(functionsById.get(id)?.professions.map((p) => p.id) ?? []);
+    onChange({ professionIds: professionIds.filter((p) => !inside.has(p)), functionIds: [...functionIds, id] });
   };
 
   // "Not listed": the server maps the typed title to the closest professions (saved answer, local match, then AI).
@@ -176,71 +186,24 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
         </ul>
       ) : (
         <div>
-          <p className="mb-1 text-xs font-medium text-hint">Or browse by category</p>
-          <ul className="flex flex-col divide-y divide-separator">
-            {taxonomy.functions.map((f) => {
-              const open = openFunction === f.id;
-              const whole = functionIds.includes(f.id);
-              const picked = f.professions.filter((p) => professionIds.includes(p.id)).length;
-              return (
-                <li key={f.id}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenFunction(open ? null : f.id)}
-                    aria-expanded={open}
-                    className={clsx(
-                      "flex w-full items-center gap-3 text-left transition-colors",
-                      whole ? "my-1.5 rounded-xl border border-accent-border bg-accent-soft px-3 py-2.5" : "py-3",
-                    )}
-                  >
-                    <span
-                      className={clsx(
-                        "grid size-8 shrink-0 place-items-center rounded-lg",
-                        whole ? "bg-[linear-gradient(180deg,var(--accent-mid),var(--accent))] text-white" : "bg-pill text-text",
-                      )}
-                    >
-                      <CategoryIcon id={f.id} className="size-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={clsx("block text-[15px]", whole && "font-semibold")}>{f.name}</span>
-                      {whole && <span className="block text-[12px] text-accent-strong">Every role in this category</span>}
-                    </span>
-                    {whole ? (
-                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-white">
-                        <Check className="size-3.5" strokeWidth={3} />
-                      </span>
-                    ) : (
-                      picked > 0 && <span className="rounded-full bg-accent-soft px-2 text-xs font-semibold text-accent-strong">{picked}</span>
-                    )}
-                    <ChevronRight className={clsx("size-4 text-hint-light transition-transform", open && "rotate-90")} aria-hidden />
-                  </button>
-                  {open && (
-                    <div className="pb-4">
-                      <CategoryOption
-                        name={f.name}
-                        selected={functionIds.includes(f.id)}
-                        locked={categoriesLocked}
-                        full={functionsFull}
-                        onClick={() => toggleFunction(f.id)}
-                      />
-                      <p className="mb-2 mt-4 text-xs font-medium text-hint">Or pick specific roles</p>
-                      <ChipGroup>
-                        {f.professions.map((p) => (
-                          <Chip
-                            key={p.id}
-                            selected={professionIds.includes(p.id)}
-                            muted={professionsFull}
-                            onClick={() => toggleProfession(p.id)}
-                          >
-                            {p.name}
-                          </Chip>
-                        ))}
-                      </ChipGroup>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
+          <p className="mb-1 text-xs font-medium text-hint">Job categories · tap to get every job in one</p>
+          <ul className="flex flex-col gap-1.5">
+            {taxonomy.functions.map((f) => (
+              <CategoryRow
+                key={f.id}
+                id={f.id}
+                name={f.name}
+                professions={f.professions}
+                whole={functionIds.includes(f.id)}
+                pickedIds={professionIds}
+                open={openFunction === f.id}
+                dimmed={!functionIds.includes(f.id) && (categoriesLocked || functionsFull)}
+                professionsFull={professionsFull}
+                onToggleWhole={() => toggleFunction(f.id)}
+                onToggleOpen={() => setOpenFunction(openFunction === f.id ? null : f.id)}
+                onToggleProfession={toggleProfession}
+              />
+            ))}
           </ul>
         </div>
       )}
@@ -248,59 +211,81 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
   );
 }
 
-/** "Any job in <category>": a prominent row, not one chip among many. */
-function CategoryOption({
+/**
+ * One category. The row itself selects the whole category (the default: jobs are scarce, so
+ * following all of it is usually right). The chevron opens specific roles for narrowing down.
+ */
+function CategoryRow({
+  id,
   name,
-  selected,
-  locked,
-  full,
-  onClick,
+  professions,
+  whole,
+  pickedIds,
+  open,
+  dimmed,
+  professionsFull,
+  onToggleWhole,
+  onToggleOpen,
+  onToggleProfession,
 }: {
+  id: string;
   name: string;
-  selected: boolean;
-  locked: boolean;
-  full: boolean;
-  onClick: () => void;
+  professions: ProfessionDto[];
+  whole: boolean;
+  pickedIds: string[];
+  open: boolean;
+  dimmed: boolean;
+  professionsFull: boolean;
+  onToggleWhole: () => void;
+  onToggleOpen: () => void;
+  onToggleProfession: (id: string) => void;
 }) {
+  const picked = professions.filter((p) => pickedIds.includes(p.id)).length;
+  const state = whole ? "All roles" : picked ? `${picked} specific ${picked === 1 ? "role" : "roles"}` : null;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={clsx(
-        "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
-        selected
-          ? "border-ink bg-ink text-white"
-          : "border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#ffffff_80%)] hover:border-accent",
-        !selected && (locked || full) && "opacity-80",
+    <li className={clsx("overflow-hidden rounded-xl border transition-colors", whole ? "border-ink bg-surface" : picked ? "border-accent-border bg-surface" : "border-separator bg-surface")}>
+      <div className="flex items-center">
+        <button type="button" onClick={onToggleWhole} aria-pressed={whole} className={clsx("flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-3 text-left", dimmed && "opacity-60")}>
+          <span className={clsx("grid size-8 shrink-0 place-items-center rounded-lg border", whole ? "border-ink bg-ink text-white" : "border-separator bg-neutral-50 text-text")}>
+            <CategoryIcon id={id} className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className={clsx("block truncate text-[15px]", (whole || picked > 0) && "font-semibold")}>{name}</span>
+            {state && <span className={clsx("block text-[12px]", whole ? "text-hint" : "text-accent-strong")}>{state}</span>}
+          </span>
+          <span
+            className={clsx(
+              "grid size-6 shrink-0 place-items-center rounded-full border transition-colors",
+              whole ? "border-ink bg-ink text-white" : "border-separator text-transparent",
+            )}
+          >
+            <Check className="size-3.5" strokeWidth={3} />
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onToggleOpen}
+          aria-expanded={open}
+          aria-label={`Pick specific roles in ${name}`}
+          className="grid h-12 w-11 shrink-0 place-items-center text-hint-light hover:text-hint"
+        >
+          <ChevronDown className={clsx("size-4 transition-transform", open && "rotate-180")} />
+        </button>
+      </div>
+      {open && (
+        <div className="border-t border-separator-subtle px-3 pb-3 pt-2.5">
+          <p className="mb-2 text-[12px] text-hint">
+            {whole ? "You get every role here. Tap roles to narrow it down instead." : "Pick only the roles you want, or tap the category above for all of them."}
+          </p>
+          <ChipGroup>
+            {professions.map((p) => (
+              <Chip key={p.id} selected={pickedIds.includes(p.id)} muted={!pickedIds.includes(p.id) && professionsFull} onClick={() => onToggleProfession(p.id)}>
+                {p.name}
+              </Chip>
+            ))}
+          </ChipGroup>
+        </div>
       )}
-    >
-      <span
-        className={clsx(
-          "grid size-9 shrink-0 place-items-center rounded-lg",
-          selected ? "bg-white/15 text-white" : "bg-[linear-gradient(180deg,var(--accent-mid),var(--accent))] text-white",
-        )}
-      >
-        <Layers className="size-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-semibold">Any job in {name}</span>
-        <span className={clsx("block text-[12px]", selected ? "text-white/70" : "text-hint")}>Every role in this category, as it&apos;s posted</span>
-      </span>
-      {selected ? (
-        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white text-ink">
-          <Check className="size-3.5" strokeWidth={3} />
-        </span>
-      ) : locked ? (
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-strong">
-          <Lock className="size-3" />
-          Pro
-        </span>
-      ) : (
-        <span className="grid size-6 shrink-0 place-items-center rounded-full border border-accent-border text-accent-strong">
-          <Plus className="size-3.5" strokeWidth={2.5} />
-        </span>
-      )}
-    </button>
+    </li>
   );
 }

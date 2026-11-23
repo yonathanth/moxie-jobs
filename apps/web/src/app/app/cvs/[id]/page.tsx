@@ -7,13 +7,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CvContent, CvDetailDto, CvReviewTip } from "@ethio/shared";
 import { CvEditor, type EditorTarget } from "@/components/cv/editor/CvEditor";
 import { CvPreview } from "@/components/cv/CvPreview";
-import { useCv, useCvCheckout, useCvPreview, useCvTemplates, useDeleteCv, usePolishCv, useReviewCv, useSendCv, useUpdateCv } from "@/components/cv/hooks";
-import { ScoreBadge, ScoreSheet } from "@/components/cv/ScorePanel";
-import { useBackButton, usePayment } from "@/components/miniapp/hooks";
+import { PackCards } from "@/components/cv/PackCards";
+import { useCv, useCvPreview, useCvTemplates, useDeleteCv, usePackCheckout, usePolishCv, useReviewCv, useSendCv, useUnlockCv, useUpdateCv } from "@/components/cv/hooks";
+import { ScoreChip, ScoreSheet } from "@/components/cv/ScorePanel";
+import { useBackButton, usePayment, usePricing } from "@/components/miniapp/hooks";
 import { CvPageSkeleton, PaperSkeleton, TemplatesSkeleton } from "@/components/skeletons";
 import { Badge, Button, CenteredMessage, cx, ErrorText, IconTile, Sheet, Spinner, StickyFooter } from "@/components/ui";
 import { scoreContent, type PolishTarget } from "@/lib/cv-score";
-import { formatBirr } from "@/lib/plans";
 import { getWebApp, haptic } from "@/lib/telegram";
 
 function openCheckout(url: string) {
@@ -134,7 +134,7 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
             {doc.locked && (
               <Badge tone="accent">
                 <Lock className="size-3" />
-                Unpaid
+                Locked
               </Badge>
             )}
           </p>
@@ -146,12 +146,11 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
             </Link>
           )}
         </div>
-        <ScoreBadge score={score} onOpen={() => setSheet("score")} />
       </header>
 
-      {/* Preview | Edit, kept in reach while scrolling. */}
-      <div className="sticky top-0 z-10 -mx-4 mt-4 bg-bg/90 px-4 py-2 backdrop-blur">
-        <div className="grid grid-cols-2 gap-1 rounded-xl border border-separator bg-surface p-1">
+      {/* Preview | Edit and the score, kept in reach while scrolling. */}
+      <div className="sticky top-0 z-20 -mx-4 mt-4 flex items-center gap-2 border-b border-separator-subtle bg-bg/90 px-4 py-2 backdrop-blur">
+        <div className="grid flex-1 grid-cols-2 gap-1 rounded-xl border border-separator bg-surface p-1">
           {(
             [
               ["preview", "Preview", Eye],
@@ -172,6 +171,7 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
             </button>
           ))}
         </div>
+        <ScoreChip score={score} onOpen={() => setSheet("score")} />
       </div>
 
       {undo && (
@@ -259,8 +259,9 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
 
 function Actions({ cv, onCheckout, flushing }: { cv: CvDetailDto; onCheckout: (p: { id: string; url: string }) => void; flushing: boolean }) {
   const send = useSendCv(cv.id);
-  const checkout = useCvCheckout(cv.id);
+  const unlock = useUnlockCv(cv.id);
   const [sent, setSent] = useState(false);
+  const [packs, setPacks] = useState(false);
 
   const doSend = () =>
     send.mutate(undefined, {
@@ -272,41 +273,92 @@ function Actions({ cv, onCheckout, flushing }: { cv: CvDetailDto; onCheckout: (p
       },
       onError: () => haptic.error(),
     });
-  const unlock = () =>
-    checkout.mutate(undefined, {
-      onSuccess: (r) => {
-        onCheckout({ id: r.paymentId, url: r.url });
-        openCheckout(r.url);
-      },
-      onError: () => haptic.error(),
-    });
 
-  const error = send.error?.message ?? checkout.error?.message ?? (send.data && !send.data.sent ? "Couldn't send it. Open the bot chat, press Start, then try again." : null);
+  const error =
+    send.error?.message ?? unlock.error?.message ?? (send.data && !send.data.sent ? "Couldn't send it. Open the bot chat, press Start, then try again." : null);
 
   return (
-    <StickyFooter>
-      {error && <ErrorText>{error}</ErrorText>}
-      {sent && !error && <p className="text-center text-[13px] font-medium text-emerald">Sent. Check your chat with the bot.</p>}
-      {cv.locked ? (
-        <>
-          <div className="flex gap-2">
-            <Button variant="secondary" className="w-auto flex-1" loading={send.isPending} disabled={flushing} onClick={doSend}>
-              Preview PDF
-            </Button>
-            <Button variant="accent" className="w-auto flex-[2]" loading={checkout.isPending} onClick={unlock}>
-              <Lock className="size-4" />
-              Unlock · {cv.unlockPrice ? formatBirr(cv.unlockPrice) : ""}
-            </Button>
-          </div>
-          <p className="text-center text-[11px] text-hint">The preview PDF is watermarked. Unlocking sends you the clean one.</p>
-        </>
+    <>
+      <StickyFooter>
+        {error && <ErrorText>{error}</ErrorText>}
+        {sent && !error && <p className="text-center text-[13px] font-medium text-emerald">Sent. Check your chat with the bot.</p>}
+        {unlock.isSuccess && !error && <p className="text-center text-[13px] font-medium text-emerald">Unlocked. The clean PDF is in your chat.</p>}
+        {cv.locked ? (
+          <>
+            <div className="flex gap-2">
+              <Button variant="secondary" className="w-auto flex-1" loading={send.isPending} disabled={flushing} onClick={doSend}>
+                Preview PDF
+              </Button>
+              {cv.unlockCredits > 0 ? (
+                <Button
+                  variant="accent"
+                  className="w-auto flex-[2]"
+                  loading={unlock.isPending}
+                  onClick={() => unlock.mutate(undefined, { onSuccess: () => haptic.success(), onError: () => haptic.error() })}
+                >
+                  <Lock className="size-4" />
+                  Unlock · 1 credit
+                </Button>
+              ) : (
+                <Button variant="accent" className="w-auto flex-[2]" onClick={() => setPacks(true)}>
+                  <Lock className="size-4" />
+                  Unlock with a CV pack
+                </Button>
+              )}
+            </div>
+            <p className="text-center text-[11px] text-hint">
+              {cv.unlockCredits > 0
+                ? `You have ${cv.unlockCredits} ${cv.kind === "tailored" ? "tailored" : "new"} CV ${cv.unlockCredits === 1 ? "credit" : "credits"} left.`
+                : "The preview PDF is watermarked. Unlocking sends you the clean one."}
+            </p>
+          </>
+        ) : (
+          <Button variant="accent" loading={send.isPending} disabled={flushing} onClick={doSend}>
+            <Send className="size-4" />
+            Send PDF to my chat
+          </Button>
+        )}
+      </StickyFooter>
+      {packs && <PackSheet cvId={cv.id} onClose={() => setPacks(false)} onCheckout={onCheckout} />}
+    </>
+  );
+}
+
+/** Pick a CV pack; one of its credits unlocks this CV as soon as it's paid. */
+function PackSheet({ cvId, onClose, onCheckout }: { cvId: string; onClose: () => void; onCheckout: (p: { id: string; url: string }) => void }) {
+  const pricing = usePricing();
+  const checkout = usePackCheckout();
+  return (
+    <Sheet title="Unlock with a CV pack" onClose={onClose}>
+      <p className="mb-5 text-[13px] text-hint">One credit unlocks this CV and the clean PDF goes to your chat. The rest are yours for later.</p>
+      {pricing.data ? (
+        <PackCards
+          packs={pricing.data.packs}
+          busyId={checkout.isPending ? checkout.variables?.pack : null}
+          disabled={checkout.isPending}
+          onBuy={(pack) => {
+            haptic.select();
+            checkout.mutate(
+              { pack, cvId },
+              {
+                onSuccess: (r) => {
+                  onCheckout({ id: r.paymentId, url: r.url });
+                  openCheckout(r.url);
+                },
+                onError: () => haptic.error(),
+              },
+            );
+          }}
+        />
       ) : (
-        <Button variant="accent" loading={send.isPending} disabled={flushing} onClick={doSend}>
-          <Send className="size-4" />
-          Send PDF to my chat
-        </Button>
+        <TemplatesSkeleton />
       )}
-    </StickyFooter>
+      {checkout.error && (
+        <div className="mt-3">
+          <ErrorText>{checkout.error.message}</ErrorText>
+        </div>
+      )}
+    </Sheet>
   );
 }
 

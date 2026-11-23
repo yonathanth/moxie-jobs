@@ -73,6 +73,26 @@ export function ScoreBadge({ score, onOpen }: { score: CvScore; onOpen: () => vo
   );
 }
 
+/** Compact score for the editor's sticky bar: always in view, never in the way. */
+export function ScoreChip({ score, onOpen }: { score: CvScore; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`CV score ${score.total}. See why`}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-separator bg-surface py-1 pl-1 pr-2.5 transition-colors hover:border-neutral-300 active:bg-neutral-50"
+    >
+      <ScoreRing score={score.total} size={32} />
+      <span className="flex flex-col items-start leading-none">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-hint">Score</span>
+        <span className="mt-0.5 inline-flex items-center gap-0.5 text-[12px] font-semibold text-accent-strong">
+          Why <ArrowRight className="size-3" aria-hidden="true" />
+        </span>
+      </span>
+    </button>
+  );
+}
+
 export interface ScoreSheetProps {
   score: CvScore;
   content: CvContent;

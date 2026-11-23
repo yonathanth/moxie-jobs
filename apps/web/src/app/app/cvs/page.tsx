@@ -1,10 +1,11 @@
 "use client";
 
 import { RowsSkeleton } from "@/components/skeletons";
-import { ChevronRight, FilePlus2, FileText, Lock, Target, Upload, type LucideIcon } from "lucide-react";
+import { ChevronRight, FilePlus2, FileText, Gauge, Lock, Target, Upload, type LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { PromoBanner } from "@/components/PromoBanner";
 import type { CvQuotaDto, CvSummaryDto } from "@ethio/shared";
-import { BottomNav } from "@/components/BottomNav";
 import { useCvList } from "@/components/cv/hooks";
 import { postedAgo } from "@/components/jobs/JobCard";
 import { Badge, Card, IconTile, PageHeader, Screen, type IconTone } from "@/components/ui";
@@ -14,6 +15,7 @@ export default function CvsPage() {
   const list = useCvList();
   return (
     <Screen className="animate-fade-up">
+      {list.data && <QuotaBanner quota={list.data.quota} />}
       <PageHeader title="CVs" subtitle="Make a strong CV, then tailor it to each job in one tap." />
 
       <div className="mt-5 grid grid-cols-2 gap-3">
@@ -29,7 +31,6 @@ export default function CvsPage() {
         <p className="mt-6 px-1 text-sm text-danger">{list.error.message}</p>
       ) : (
         <>
-          <QuotaCard quota={list.data.quota} />
           <section className="mt-5">
             <h2 className="mb-2 px-1 text-[15px] font-semibold">My CVs</h2>
             {list.data.items.length === 0 ? (
@@ -49,15 +50,22 @@ export default function CvsPage() {
           </section>
         </>
       )}
-      <BottomNav />
     </Screen>
   );
 }
 
+/** Soft card tints (as on the plan cards), per icon tone. */
+const TINT: Partial<Record<IconTone, string>> = {
+  accent: "border-accent-border/80 bg-[linear-gradient(135deg,#fff1e8_0%,#fff8f3_50%,#ffffff_100%)]",
+  sky: "border-sky-200 bg-[linear-gradient(135deg,#e6f4fb_0%,#f3f9fd_50%,#ffffff_100%)]",
+  violet: "border-violet-200/80 bg-[linear-gradient(135deg,#f3effd_0%,#faf8fe_50%,#ffffff_100%)]",
+  emerald: "border-emerald-200/80 bg-[linear-gradient(135deg,#ebf8f2_0%,#f7fcf9_50%,#ffffff_100%)]",
+};
+
 function StartCard({ href, icon: Icon, tone, title, body }: { href: string; icon: LucideIcon; tone: IconTone; title: string; body: string }) {
   return (
-    <Link href={href}>
-      <Card className="h-full p-3.5 transition-colors active:bg-neutral-50">
+    <Link href={href} className="group">
+      <Card className={`h-full p-3.5 transition-transform group-active:scale-[0.99] ${TINT[tone] ?? ""}`}>
         <IconTile tone={tone}>
           <Icon className="size-5" />
         </IconTile>
@@ -68,30 +76,38 @@ function StartCard({ href, icon: Icon, tone, title, body }: { href: string; icon
   );
 }
 
-function QuotaCard({ quota }: { quota: CvQuotaDto }) {
-  const left = (n: number | null, one: string, many: string) => (n === null ? `Unlimited ${many}` : `${n} ${n === 1 ? one : many} left`);
+/** What's left (plan allowance, pack credits) or the cheapest pack, as a slim banner at the top. */
+function QuotaBanner({ quota }: { quota: CvQuotaDto }) {
+  const router = useRouter();
+  if (quota.newLeft === null && quota.tailorLeft === null) return null; // unlimited: nothing to sell
+  const n = (x: number | null) => (x === null ? "unlimited" : String(x));
   const included = quota.newLeft !== 0 || quota.tailorLeft !== 0;
+  const credits = quota.credits.new + quota.credits.tailor > 0;
+  const cheapest = quota.packs[0];
+  const text = included
+    ? `This month: ${n(quota.newLeft)} new · ${n(quota.tailorLeft)} tailored left`
+    : credits
+      ? `Credits: ${quota.credits.new} new · ${quota.credits.tailor} tailored`
+      : quota.freeTailoringAvailable
+        ? `First tailored CV free · packs from ${cheapest ? formatBirr(cheapest.price) : ""}`
+        : `CV packs from ${cheapest ? formatBirr(cheapest.price) : ""} · credits never expire`;
   return (
-    <Card className="mt-3 bg-pill/40 p-3.5">
-      {included ? (
-        <p className="text-[13px]">
-          <span className="font-semibold">This month:</span> {left(quota.newLeft, "new CV", "new CVs")} · {left(quota.tailorLeft, "tailoring", "tailorings")}
-        </p>
-      ) : (
-        <p className="text-[13px]">
-          <span className="font-semibold">Pay per CV:</span> {formatBirr(quota.prices.cv_new)} for a new or improved CV, {formatBirr(quota.prices.cv_tailor)} per tailored CV. You see it
-          first and pay only to download.
-        </p>
-      )}
-      {quota.freeTailoringAvailable && <p className="mt-1 text-[13px] font-semibold text-accent-strong">Your first tailored CV is free.</p>}
-    </Card>
+    <PromoBanner
+      id={`cv-quota-${included ? "plan" : credits ? "credits" : "packs"}`}
+      icon={Gauge}
+      action={included || credits ? "Get more" : "See packs"}
+      onAction={() => router.push("/app/plans#packs")}
+      className="sticky top-0 z-20 -mx-4 -mt-5 mb-5"
+    >
+      {text}
+    </PromoBanner>
   );
 }
 
 function CvRow({ cv }: { cv: CvSummaryDto }) {
   return (
-    <Link href={`/app/cvs/${cv.id}`}>
-      <Card className="flex items-center gap-3 p-3.5 transition-colors active:bg-neutral-50">
+    <Link href={`/app/cvs/${cv.id}`} className="group">
+      <Card className="flex items-center gap-3 p-3.5 transition-colors group-active:bg-neutral-50">
         <IconTile tone={cv.kind === "tailored" ? "violet" : "emerald"}>{cv.kind === "tailored" ? <Target className="size-5" /> : <FileText className="size-5" />}</IconTile>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold">{cv.title}</p>
@@ -102,7 +118,7 @@ function CvRow({ cv }: { cv: CvSummaryDto }) {
         {cv.locked ? (
           <Badge tone="accent">
             <Lock className="size-3" />
-            {cv.unlockPrice ? formatBirr(cv.unlockPrice) : "Unpaid"}
+            Locked
           </Badge>
         ) : null}
         <ChevronRight className="size-4 text-hint-light" />

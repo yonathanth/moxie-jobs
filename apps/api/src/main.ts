@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
+import compression from "compression";
 import helmet from "helmet";
 import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module";
@@ -13,6 +14,9 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
   app.set("trust proxy", 1); // behind Caddy/Nginx on the VPS: real client IPs for rate limiting
   app.use(helmet());
+  // JSON is gzipped here (nginx only compresses HTML by default): the taxonomy is 50 KB raw, ~6 KB gzipped.
+  // The bot webhook is tiny and excluded by the threshold.
+  app.use(compression({ threshold: 1024 }));
   app.enableCors({ origin: env.CORS_ORIGINS, credentials: false, maxAge: 600 });
   app.useBodyParser("json", { limit: "256kb" });
   app.enableShutdownHooks();

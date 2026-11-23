@@ -1,4 +1,6 @@
 import type {
+  CvContact,
+  PackCheckoutRequest,
   AdminOverviewDto,
   AdminSettingsDto,
   AdminSourceDto,
@@ -75,16 +77,21 @@ export const api = {
   resolveTerm: (token: string, body: ResolveTermRequest) =>
     request<ResolveTermResponse>("/taxonomy/resolve", { method: "POST", token, body: JSON.stringify(body) }),
   me: (token: string) => request<MeDto>("/me", { token }),
+  setCvContact: (token: string, body: CvContact) => request<MeDto>("/me/cv-contact", { method: "PUT", token, body: JSON.stringify(body) }),
   updateMe: (token: string, body: { alertsPaused: boolean }) =>
     request<MeDto>("/me", { method: "PATCH", token, body: JSON.stringify(body) }),
   preferences: (token: string) => request<PreferencesDto | null>("/me/preferences", { token }),
   savePreferences: (token: string, body: PreferencesInput) =>
     request<PreferencesDto>("/me/preferences", { method: "PUT", token, body: JSON.stringify(body) }),
   pricing: () => request<PricingDto>("/billing/plans"),
+  checkoutPack: (token: string, body: PackCheckoutRequest) =>
+    request<CheckoutResponse>("/billing/packs/checkout", { method: "POST", token, body: JSON.stringify(body) }),
   checkout: (token: string, body: CheckoutRequest) =>
     request<CheckoutResponse>("/billing/checkout", { method: "POST", token, body: JSON.stringify(body) }),
   jobs: (token: string, q: JobFeedQuery) => request<JobFeedPage>(`/jobs?${feedParams(q)}`, { token }),
   job: (token: string, id: string) => request<JobCardDto>(`/jobs/${id}`, { token }),
+  setSaved: (token: string, id: string, saved: boolean) =>
+    request<{ saved: boolean }>(`/jobs/${id}/save`, { method: saved ? "PUT" : "DELETE", token }),
   admin: {
     overview: (token: string) => request<AdminOverviewDto>("/admin/overview", { token }),
     review: (token: string, cursor?: string) => request<ReviewPage>(`/admin/review${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { token }),
@@ -114,7 +121,7 @@ export const api = {
       request<CvDetailDto>(`/cv/${id}`, { method: "PATCH", token, body: JSON.stringify(body) }),
     remove: (token: string, id: string) => request<void>(`/cv/${id}`, { method: "DELETE", token }),
     send: (token: string, id: string) => request<{ sent: boolean; watermarked: boolean }>(`/cv/${id}/send`, { method: "POST", token, body: "{}" }),
-    checkout: (token: string, id: string) => request<CheckoutResponse>(`/billing/cv/${id}/checkout`, { method: "POST", token, body: "{}" }),
+    unlock: (token: string, id: string) => request<CvDetailDto>(`/cv/${id}/unlock`, { method: "POST", token, body: "{}" }),
     polish: (token: string, id: string, body: { content?: CvContent; targets: CvPolishTarget[] | "all" }) =>
       request<CvPolishResponse>(`/cv/${id}/polish`, { method: "POST", token, body: JSON.stringify(body) }),
     review: (token: string, id: string, content?: CvContent) =>

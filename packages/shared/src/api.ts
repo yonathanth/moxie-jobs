@@ -1,6 +1,6 @@
 import type { BillingPeriod, PaidPlan, Plan } from "./enums";
 import type { City } from "./locations";
-import type { CvProduct, PlanLimits, PriceTable } from "./plans";
+import type { CvPackId, CvProduct, PlanLimits, PriceTable } from "./plans";
 import type { Preferences } from "./preferences";
 
 /** Response shapes shared by the API and the web app. */
@@ -50,6 +50,16 @@ export interface MeDto {
   onboarded: boolean;
   isAdmin: boolean;
   stats: MeStats;
+  /** Personal details for CVs, asked once in the CV flow; null until then. */
+  cvContact: CvContact | null;
+}
+
+/** Printed at the top of every CV. Edited in Profile → CV details. */
+export interface CvContact {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  location: string | null;
 }
 
 export interface MeStats {
@@ -64,6 +74,13 @@ export interface PricingDto {
   currency: "ETB";
   prices: PriceTable;
   limits: Record<Plan, PlanLimits>;
+  packs: CvPackDto[];
+}
+
+/** Buy a CV pack; with cvId, one of its credits unlocks that CV straight away. */
+export interface PackCheckoutRequest {
+  pack: CvPackId;
+  cvId?: string;
 }
 
 export interface CheckoutRequest {
@@ -79,8 +96,8 @@ export interface CheckoutResponse {
 
 export interface PaymentDto {
   id: string;
-  /** A plan, or a one-time CV product. */
-  plan: PaidPlan | CvProduct;
+  /** A plan, a CV pack, or (old payments) a single CV. */
+  plan: PaidPlan | CvPackId | CvProduct;
   period: BillingPeriod | "one_time";
   amount: number;
   status: "pending" | "paid" | "failed" | "cancelled";
@@ -104,6 +121,10 @@ export interface JobCardDto {
   locked: boolean;
   /** Why it's in "For you": sent as an alert, held by the daily limit, or locked (premium). */
   match: "sent" | "waiting" | "locked" | null;
+  /** The user bookmarked it (Saved tab). */
+  saved: boolean;
+  /** Job category (taxonomy function id), for the category icon. */
+  functionId: string | null;
   employerType: string | null;
   employerLabel: string | null;
   company: string | null;
@@ -129,7 +150,8 @@ export interface JobCardDto {
   sourceUrl: string | null;
 }
 
-export const FEED_SCOPES = ["for_you", "all"] as const;
+/** for_you = matches, all = browse, saved = bookmarked (newest save first; closed jobs included). */
+export const FEED_SCOPES = ["for_you", "all", "saved"] as const;
 export type FeedScope = (typeof FEED_SCOPES)[number];
 
 export const POSTED_WITHIN = ["1d", "3d", "7d", "30d"] as const;
@@ -162,6 +184,24 @@ export interface JobFeedPage {
   nextCursor: string | null;
   /** First page only: how many locked (premium) matches the plan hides, for the upsell row. */
   lockedCount?: number;
+}
+
+/** A shared job link (public, no sign-in): enough to want it; applying happens in the bot. */
+export interface PublicJobDto {
+  id: string;
+  title: string;
+  company: string | null;
+  employerLabel: string | null;
+  location: string | null;
+  jobType: string | null;
+  experience: string | null;
+  salary: string | null;
+  deadline: string | null;
+  firstSeenAt: string;
+  /** First sentences of the summary; null for premium jobs. */
+  teaser: string | null;
+  skills: string[];
+  closed: boolean;
 }
 
 /** "Not listed" entry typed in a picker: mapped to the closest taxonomy entries. */
@@ -236,7 +276,7 @@ export interface AdminSettingsDto {
   delivery: { maxJobAgeHours: number; teaserHourEat: number; quietFromEat: number; quietToEat: number };
   prices: PriceTable;
   planLimits: Record<Plan, PlanLimits>;
-  cvPrices: Record<CvProduct, number>;
+  cvPackPrices: Record<CvPackId, number>;
   unpaidCvCap: number;
 }
 
@@ -315,8 +355,6 @@ export interface CvSummaryDto {
   templateId: string;
   /** Made but not paid for: downloads are watermarked until unlocked. */
   locked: boolean;
-  /** Price to unlock (ETB) while locked. */
-  unlockPrice: number | null;
   jobId: string | null;
   jobTitle: string | null;
   updatedAt: string;
@@ -327,6 +365,8 @@ export interface CvDetailDto extends CvSummaryDto {
   baseCvId: string | null;
   /** Tailored CVs: requirements the person may not meet ("Team supervision"). */
   gaps: string[];
+  /** Locked CVs: pack credits of the right kind the person has (≥1 = unlock without paying now). */
+  unlockCredits: number;
   /** Follow-up questions the engine asked, to make the CV stronger. */
   questions: { id: string; question: string; reason?: string }[];
   /** Tailored CVs: what the job asks for (drives the score's job match). */
@@ -358,9 +398,20 @@ export interface CvReviewTip {
   section?: string;
 }
 
+export interface CvPackDto {
+  id: CvPackId;
+  name: string;
+  price: number;
+  newCvs: number;
+  tailored: number;
+}
+
 export interface CvQuotaDto {
   plan: Plan;
-  prices: Record<CvProduct, number>;
+  /** Packs on sale (credits that never expire). */
+  packs: CvPackDto[];
+  /** Pack credits left. */
+  credits: { new: number; tailor: number };
   /** Left in the current 30 days; null = unlimited. */
   newLeft: number | null;
   tailorLeft: number | null;
@@ -382,6 +433,8 @@ export interface CvGenerateRequest {
   name?: string;
   email?: string;
   phone?: string;
+  /** City / country line, e.g. "Addis Ababa, Ethiopia". */
+  location?: string;
   /** improve: what to focus on ("make it more senior"). */
   focus?: string;
   /** tailor: the job, and the base CV to tailor (default: the newest base CV). */

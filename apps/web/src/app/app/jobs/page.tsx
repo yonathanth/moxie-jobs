@@ -2,14 +2,14 @@
 
 import clsx from "clsx";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { ChevronRight, Lock, Search, SlidersHorizontal, X } from "lucide-react";
+import { Bookmark, Lock, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ScreenSkeleton } from "@/components/skeletons";
 import { EMPLOYMENT_TYPES, type FeedScope } from "@ethio/shared";
-import { BottomNav } from "@/components/BottomNav";
 import { FilterSheet } from "@/components/jobs/FilterSheet";
+import { Portal } from "@/components/Portal";
 import { JobCard, JobCardSkeleton } from "@/components/jobs/JobCard";
 import {
   activeFilterCount,
@@ -24,7 +24,7 @@ import {
 import { MAX_FEED_ITEMS, useJob, useJobFeed, useTaxonomy } from "@/components/miniapp/hooks";
 import { useSession } from "@/components/miniapp/session";
 import { usePaywall } from "@/components/paywall";
-import { Button, Chip, IconTile, Spinner } from "@/components/ui";
+import { Button, Chip, Spinner } from "@/components/ui";
 import { haptic } from "@/lib/telegram";
 
 export default function JobsPage() {
@@ -68,7 +68,11 @@ function Feed() {
 
   const feed = useJobFeed(toQuery(state));
   const similarJob = useJob(state.similar ?? "", !!state.similar);
-  const items = useMemo(() => feed.data?.pages.flatMap((p) => p.items) ?? [], [feed.data]);
+  // Unique by id: locked premium matches pinned to the top of page 1 can come round again on later pages.
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    return (feed.data?.pages.flatMap((p) => p.items) ?? []).filter((j) => !seen.has(j.id) && seen.add(j.id));
+  }, [feed.data]);
   const lockedCount = feed.data?.pages[0]?.lockedCount ?? 0;
   const filterCount = activeFilterCount(state);
   const cityName = useMemo(() => new Map((taxonomy.data?.cities ?? []).map((c) => [c.id, c.name])), [taxonomy.data]);
@@ -81,7 +85,7 @@ function Feed() {
   }, [lockedCount, filterCount, state.scope, feed.isPending]);
   const virtualizer = useWindowVirtualizer({
     count: items.length,
-    estimateSize: () => 150,
+    estimateSize: () => 200,
     overscan: 6,
     gap: 12,
     scrollMargin,
@@ -122,15 +126,19 @@ function Feed() {
         <div className="flex items-center justify-between px-1">
           <h1 className="text-[26px] font-bold tracking-tight">Jobs</h1>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-separator bg-surface p-1">
-          {(["for_you", "all"] as const).map((s) => (
+        <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-separator bg-surface p-1">
+          {(["for_you", "all", "saved"] as const).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setScope(s)}
-              className={clsx("rounded-lg py-2 text-sm font-semibold transition-colors", state.scope === s ? "bg-ink text-white" : "text-hint")}
+              className={clsx(
+                "inline-flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-colors",
+                state.scope === s ? "bg-ink text-white" : "text-hint",
+              )}
             >
-              {s === "for_you" ? "For you" : "All jobs"}
+              {s === "saved" && <Bookmark className={clsx("size-3.5", state.scope === s && "fill-current")} />}
+              {s === "for_you" ? "For you" : s === "all" ? "All jobs" : "Saved"}
             </button>
           ))}
         </div>
@@ -178,23 +186,6 @@ function Feed() {
       </div>
 
       <div className="px-4 pt-4">
-        {state.scope === "for_you" && lockedCount > 0 && (
-          <button type="button" onClick={() => paywall.gate("premium_job")} className="mb-3 block w-full text-left">
-            <div className="flex items-center gap-3 rounded-2xl border border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#fffaf6_60%,#ffffff_100%)] p-4">
-              <IconTile>
-                <Lock className="size-5" />
-              </IconTile>
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold">
-                  {lockedCount} premium {lockedCount === 1 ? "match" : "matches"} this week
-                </p>
-                <p className="text-[13px] text-hint">NGO, international & overseas jobs come with Pro</p>
-              </div>
-              <ChevronRight className="size-5 text-accent-strong" />
-            </div>
-          </button>
-        )}
-
         {feed.isPending ? (
           <div className="flex flex-col gap-3">
             {Array.from({ length: 5 }, (_, i) => (
@@ -250,6 +241,7 @@ function Feed() {
       </div>
 
       {filtersOpen && taxonomy.data && (
+        <Portal>
         <FilterSheet
           value={state}
           cities={taxonomy.data.cities}
@@ -260,8 +252,8 @@ function Feed() {
             update(f);
           }}
         />
+        </Portal>
       )}
-      <BottomNav />
     </main>
   );
 }
@@ -275,6 +267,22 @@ function EmptyState({ scope, filtered, onClear, onBrowse }: { scope: FeedScope; 
         <div className="mx-auto mt-4 max-w-xs">
           <Button variant="secondary" onClick={onClear}>
             Clear search and filters
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (scope === "saved") {
+    return (
+      <div className="py-16 text-center">
+        <span className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl border border-accent-border/60 bg-accent-soft text-accent-strong">
+          <Bookmark className="size-5" />
+        </span>
+        <p className="font-semibold">No saved jobs yet</p>
+        <p className="mx-auto mt-1 max-w-xs text-sm text-hint">Tap Save on any job to keep it here for later, even after it closes.</p>
+        <div className="mx-auto mt-4 max-w-xs">
+          <Button variant="secondary" onClick={onBrowse}>
+            Browse all jobs
           </Button>
         </div>
       </div>

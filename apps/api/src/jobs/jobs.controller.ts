@@ -1,7 +1,8 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from "@nestjs/common";
+import { Controller, Delete, Get, Param, ParseUUIDPipe, Put, Query, UseGuards } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import { z } from "zod";
 import type { User } from "@ethio/db";
-import { CITY_IDS, EMPLOYER_FILTERS, EMPLOYMENT_TYPE_IDS, FEED_SCOPES, POSTED_WITHIN, type JobCardDto, type JobFeedPage } from "@ethio/shared";
+import { CITY_IDS, EMPLOYER_FILTERS, EMPLOYMENT_TYPE_IDS, FEED_SCOPES, POSTED_WITHIN, type JobCardDto, type JobFeedPage, type PublicJobDto } from "@ethio/shared";
 import { AuthGuard, CurrentUser } from "../auth/auth.guard";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { JobsService } from "./jobs.service";
@@ -61,8 +62,33 @@ export class JobsController {
     });
   }
 
+  @Put(":id/save")
+  save(@CurrentUser() user: User, @Param("id", new ParseUUIDPipe()) id: string) {
+    return this.jobs.save(user, id);
+  }
+
+  @Delete(":id/save")
+  unsave(@CurrentUser() user: User, @Param("id", new ParseUUIDPipe()) id: string) {
+    return this.jobs.unsave(user, id);
+  }
+
   @Get(":id")
   one(@CurrentUser() user: User, @Param("id", new ParseUUIDPipe()) id: string): Promise<JobCardDto> {
     return this.jobs.one(user, id);
+  }
+}
+
+/**
+ * Shared job links (jobs.gomoxie.app/j/:id): a public teaser, no sign-in.
+ * Called server-side by the web app (cached there), so it is not IP-throttled.
+ */
+@Controller("public/jobs")
+@SkipThrottle()
+export class PublicJobsController {
+  constructor(private readonly jobs: JobsService) {}
+
+  @Get(":id")
+  one(@Param("id", new ParseUUIDPipe()) id: string): Promise<PublicJobDto> {
+    return this.jobs.publicOne(id);
   }
 }

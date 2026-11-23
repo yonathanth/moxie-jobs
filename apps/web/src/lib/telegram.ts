@@ -53,3 +53,44 @@ export function openExternal(url: string) {
   else if (wa) wa.openLink(url);
   else window.open(url, "_blank", "noopener");
 }
+
+/**
+ * Telegram's signed launch data, available before telegram-web-app.js loads: Telegram puts it in
+ * the URL hash (#tgWebAppData=…), and the script keeps a copy in sessionStorage after navigation.
+ * Reading it here lets sign-in start without waiting for the script.
+ */
+export function readInitData(): string | null {
+  if (typeof window === "undefined") return null;
+  const fromScript = window.Telegram?.WebApp?.initData;
+  if (fromScript) return fromScript;
+  try {
+    const hash = new URLSearchParams(window.location.hash.slice(1)).get("tgWebAppData");
+    if (hash) return hash;
+    const saved = JSON.parse(sessionStorage.getItem("__telegram__initParams") ?? "null") as { tgWebAppData?: string } | null;
+    return saved?.tgWebAppData || null;
+  } catch {
+    return null;
+  }
+}
+
+/** The Telegram user id inside initData (unverified: only used to pick a cached session). */
+export function initDataUserId(initData: string): number | null {
+  try {
+    const user = JSON.parse(new URLSearchParams(initData).get("user") ?? "null") as { id?: number } | null;
+    return typeof user?.id === "number" ? user.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Once the script is in: tell Telegram we're ready, go full height, match our colours. */
+export function prepareWebApp() {
+  const wa = getWebApp();
+  if (!wa) return;
+  wa.ready();
+  wa.expand();
+  wa.disableVerticalSwipes?.();
+  wa.setHeaderColor?.("#fdfdfd");
+  wa.setBackgroundColor?.("#fdfdfd");
+  wa.setBottomBarColor?.("#fdfdfd");
+}

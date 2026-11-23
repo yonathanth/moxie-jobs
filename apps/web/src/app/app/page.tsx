@@ -1,15 +1,17 @@
 "use client";
 
-import { Briefcase, ChevronRight, Crown, Lock, Settings2, ShieldCheck, Zap } from "lucide-react";
+import { ArrowRight, Briefcase, ChevronRight, Crown, Lock, PencilLine, Settings2, ShieldCheck, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScreenSkeleton } from "@/components/skeletons";
+import { PromoBanner } from "@/components/PromoBanner";
+import { usePaywall } from "@/components/paywall";
 import { EXPERIENCE_BANDS, PLAN_NAME, type MeDto, type PreferencesDto, type TaxonomyDto } from "@ethio/shared";
-import { BottomNav } from "@/components/BottomNav";
 import { usePreferences, useRefreshMe, useSetAlertsPaused, useTaxonomy } from "@/components/miniapp/hooks";
 import { useSession } from "@/components/miniapp/session";
-import { Badge, Card, IconTile, PageHeader, Screen, Section, Toggle } from "@/components/ui";
+import { Badge, Card, IconTile, PageHeader, Screen, Section, Sheet, Toggle } from "@/components/ui";
+import { ContactForm } from "@/components/cv/ContactForm";
 import { formatDate } from "@/lib/plans";
 
 /** Mini App home: plan, today's alerts, locked premium matches, what we match on. */
@@ -20,6 +22,7 @@ export default function MiniAppHome() {
   const prefs = usePreferences();
   const alerts = useSetAlertsPaused();
   const refresh = useRefreshMe();
+  const paywall = usePaywall();
 
   useEffect(() => {
     if (!me.onboarded) router.replace("/app/onboarding");
@@ -39,6 +42,17 @@ export default function MiniAppHome() {
 
   return (
     <Screen className="animate-fade-up">
+      {!me.limits.premiumJobs && me.stats.lockedThisWeek > 0 && (
+        <PromoBanner
+          id={`locked-${me.stats.lockedThisWeek}`}
+          icon={Lock}
+          action="Unlock"
+          onAction={() => paywall.gate("premium_job")}
+          className="sticky top-0 z-20 -mx-4 -mt-5 mb-5"
+        >
+          {me.stats.lockedThisWeek} premium {me.stats.lockedThisWeek === 1 ? "job" : "jobs"} matched you this week
+        </PromoBanner>
+      )}
       <PageHeader
         eyebrow={`Selam${me.firstName ? `, ${me.firstName}` : ""}`}
         title="Profile"
@@ -46,7 +60,6 @@ export default function MiniAppHome() {
       />
 
       <TodayCard me={me} />
-      {!me.limits.premiumJobs && me.stats.lockedThisWeek > 0 && <LockedCard count={me.stats.lockedThisWeek} />}
 
       <Section title="Alerts">
         <Toggle
@@ -59,6 +72,7 @@ export default function MiniAppHome() {
 
       {taxonomy.data && prefs.data && <PreferencesSummary prefs={prefs.data} taxonomy={taxonomy.data} />}
 
+      <CvDetails me={me} />
       <PlanCard me={me} />
       {me.isAdmin && (
         <Link
@@ -72,7 +86,6 @@ export default function MiniAppHome() {
           <ChevronRight className="size-4" />
         </Link>
       )}
-      <BottomNav />
     </Screen>
   );
 }
@@ -88,72 +101,90 @@ function PlanBadge({ me }: { me: MeDto }) {
   );
 }
 
+/** Today's alerts as one tappable card that opens the feed. */
 function TodayCard({ me }: { me: MeDto }) {
   const cap = me.limits.dailyJobCap;
   const used = Math.min(me.stats.sentToday, cap ?? Infinity);
+  const n = me.stats.sentToday;
   return (
-    <Card className="mt-5">
-      <div className="flex items-center gap-3">
-        <IconTile tone="sky">
-          <Briefcase className="size-5" />
-        </IconTile>
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold">
-            {me.stats.sentToday === 0 ? "No new jobs yet today" : `${me.stats.sentToday} ${me.stats.sentToday === 1 ? "job" : "jobs"} sent today`}
-          </p>
-          <p className="text-[13px] text-hint">
-            {me.stats.sentThisWeek} this week · they arrive in the chat
-          </p>
-        </div>
-      </div>
-      <Link
-        href="/app/jobs"
-        className="mt-4 inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-ink text-[15px] font-semibold text-white transition-colors hover:bg-ink-hover"
-      >
-        Open my job feed
-        <ChevronRight className="size-4" />
-      </Link>
-      {cap !== null && (
-        <div className="mt-4">
-          <div className="flex justify-between text-xs font-medium text-hint">
-            <span>Today&apos;s alerts</span>
-            <span>
-              {used}/{cap}
-            </span>
+    <Link href="/app/jobs" className="group mt-5 block">
+      <Card className="transition-colors group-active:bg-neutral-50">
+        <div className="flex items-center gap-3">
+          <IconTile tone="sky">
+            <Briefcase className="size-5" />
+          </IconTile>
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] font-semibold">{n === 0 ? "No new jobs yet today" : `${n} new ${n === 1 ? "job" : "jobs"} for you today`}</p>
+            <p className="text-[13px] text-hint">{me.stats.sentThisWeek} this week · open your feed</p>
           </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-pill">
-            <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(used / cap) * 100}%` }} />
-          </div>
-          {used >= cap && (
-            <p className="mt-2 text-[13px] text-hint">
-              You&apos;ve reached today&apos;s limit.{" "}
-              <Link href="/app/plans" className="font-semibold text-accent-strong">
-                Go unlimited
-              </Link>
-            </p>
-          )}
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-white transition-transform group-hover:translate-x-0.5">
+            <ArrowRight className="size-4" />
+          </span>
         </div>
-      )}
-    </Card>
+        {cap !== null && (
+          <div className="mt-4">
+            <div className="flex justify-between text-xs font-medium text-hint">
+              <span>Today&apos;s alerts</span>
+              <span>
+                {used}/{cap}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-pill">
+              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(used / cap) * 100}%` }} />
+            </div>
+            {used >= cap && <p className="mt-2 text-[13px] text-hint">You&apos;ve reached today&apos;s limit. More come with Pro.</p>}
+          </div>
+        )}
+      </Card>
+    </Link>
   );
 }
 
-function LockedCard({ count }: { count: number }) {
+/** Personal details printed on every CV (asked once in the CV flow). */
+function CvDetails({ me }: { me: MeDto }) {
+  const [editing, setEditing] = useState(false);
+  const c = me.cvContact;
+  const rows = c
+    ? [
+        ["Name", c.name],
+        ["Phone", c.phone],
+        ["Email", c.email],
+        ["City", c.location],
+      ]
+    : [];
   return (
-    <Link href="/app/plans" className="mt-3 block">
-      <Card className="flex items-center gap-3 border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#fffaf6_60%,#ffffff_100%)]">
-        <IconTile>
-          <Lock className="size-5" />
-        </IconTile>
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold">
-            {count} premium {count === 1 ? "job" : "jobs"} matched you this week
-          </p>
-          <p className="text-[13px] text-hint">NGO, international & overseas jobs come with Pro</p>
-        </div>
-        <ChevronRight className="size-5 text-accent-strong" />
-      </Card>
-    </Link>
+    <>
+      <Section
+        title="CV details"
+        aside={
+          <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 font-semibold text-accent-strong">
+            <PencilLine className="size-3.5" />
+            {c ? "Edit" : "Add"}
+          </button>
+        }
+      >
+        {c ? (
+          <dl className="flex flex-col divide-y divide-separator-subtle">
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
+                <dt className="w-24 shrink-0 text-[13px] text-hint">{label}</dt>
+                <dd className={value ? "min-w-0 flex-1 truncate text-[14px] font-medium" : "min-w-0 flex-1 text-[14px] text-hint-light"}>{value ?? "Not added"}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <button type="button" onClick={() => setEditing(true)} className="w-full text-left text-[14px] text-hint">
+            Your name, phone and email for the top of your CVs. Add them once; every CV uses them.
+          </button>
+        )}
+      </Section>
+      {editing && (
+        <Sheet title="CV details" onClose={() => setEditing(false)}>
+          <p className="mb-4 text-[13px] text-hint">Printed at the top of every new CV.</p>
+          <ContactForm submitLabel="Save" onSaved={() => setEditing(false)} />
+        </Sheet>
+      )}
+    </>
   );
 }
 

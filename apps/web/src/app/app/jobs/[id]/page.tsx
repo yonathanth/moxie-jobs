@@ -3,12 +3,14 @@
 import clsx from "clsx";
 import { Briefcase, Clock, ExternalLink, FileText, GraduationCap, Lock, MapPin, User, Wallet } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useState } from "react";
 import { ScreenSkeleton } from "@/components/skeletons";
 import type { JobCardDto } from "@ethio/shared";
+import { SaveButton, ShareButton } from "@/components/jobs/JobActions";
 import { daysLeft, postedAgo } from "@/components/jobs/JobCard";
 import { useBackButton, useJob } from "@/components/miniapp/hooks";
 import { usePaywall } from "@/components/paywall";
+import { PromoBanner } from "@/components/PromoBanner";
 import { Badge, Button, Card, CenteredMessage, IconTile, StickyFooter } from "@/components/ui";
 import { formatDate } from "@/lib/plans";
 import { haptic, openExternal } from "@/lib/telegram";
@@ -50,12 +52,7 @@ function JobDetail() {
 
 function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
   const paywall = usePaywall();
-  const cvRef = useRef<HTMLDivElement>(null);
   const [cvHighlight] = useState(wantsCv);
-
-  useEffect(() => {
-    if (wantsCv) cvRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [wantsCv]);
 
   const router = useRouter();
   const tailor = () => {
@@ -68,6 +65,18 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 pb-36 pt-5 animate-fade-up">
+      {!job.locked && !closed && (
+        <PromoBanner
+          id="tailor-cv"
+          dismissable={false}
+          icon={FileText}
+          action="Tailor"
+          onAction={tailor}
+          className={clsx("sticky top-0 z-20 -mx-4 -mt-5 mb-4", cvHighlight && "ring-2 ring-inset ring-accent/40")}
+        >
+          Get a CV tailored to this job
+        </PromoBanner>
+      )}
       <div className="flex flex-wrap items-center gap-2 px-1">
         {job.employerLabel && <Badge tone={job.locked ? "accent" : "neutral"}>{job.employerLabel}</Badge>}
         {job.match === "waiting" && <Badge>Over today&apos;s alert limit</Badge>}
@@ -75,6 +84,10 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
       </div>
       <h1 className="mt-2 px-1 text-[24px] font-bold leading-tight tracking-tight">{job.title}</h1>
       {job.company && <p className="mt-1 px-1 text-[15px] text-hint">{job.company}</p>}
+      <div className="mt-3 flex gap-2 px-1">
+        <SaveButton job={job} variant="pill" />
+        <ShareButton job={job} variant="pill" />
+      </div>
 
       {job.locked ? (
         <Card className="mt-5 border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#ffffff_70%)]">
@@ -143,25 +156,6 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
               </Card>
             </section>
           )}
-
-          <div ref={cvRef} className="mt-5 scroll-mt-24">
-            <Card className={clsx("transition-shadow", cvHighlight && "ring-2 ring-accent/40")}>
-              <div className="flex items-start gap-3">
-                <IconTile tone="violet">
-                  <FileText className="size-5" />
-                </IconTile>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-semibold">A CV tailored to this job</p>
-                  <p className="mt-1 text-[13px] text-hint">
-                    We rewrite your CV around this post&apos;s requirements, using only what&apos;s true. No CV yet? We make your first one free.
-                  </p>
-                </div>
-              </div>
-              <Button variant="secondary" className="mt-3" onClick={tailor}>
-                Tailor my CV for this job
-              </Button>
-            </Card>
-          </div>
 
           {job.sourceTitle && <p className="mt-5 px-1 text-center text-xs text-hint">Found on {job.sourceTitle}</p>}
         </>

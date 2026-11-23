@@ -15,6 +15,7 @@ const generateSchema = z
     name: z.string().trim().max(120).optional(),
     email: z.string().trim().max(200).optional(),
     phone: z.string().trim().max(40).optional(),
+    location: z.string().trim().max(80).optional(),
     focus: z.string().trim().max(500).optional(),
     jobId: z.uuid().optional(),
     baseCvId: z.uuid().optional(),
@@ -127,6 +128,11 @@ export class CvController {
   }
 
   /** Sends the PDF to the person's Telegram chat (watermarked while unpaid). */
+  @Post(":id/unlock")
+  unlock(@CurrentUser() user: User, @Param("id", new ParseUUIDPipe()) id: string) {
+    return this.cvs.unlockWithCredit(user, id);
+  }
+
   @Post(":id/send")
   @HttpCode(200)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })

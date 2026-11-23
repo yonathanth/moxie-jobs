@@ -43,7 +43,7 @@ const list = (v: string | null, allowed: ReadonlySet<string> | readonly string[]
 export function parseFeedState(params: URLSearchParams): FeedState {
   const posted = params.get("posted");
   return {
-    scope: params.get("scope") === "all" ? "all" : "for_you",
+    scope: params.get("scope") === "all" ? "all" : params.get("scope") === "saved" ? "saved" : "for_you",
     q: (params.get("q") ?? "").slice(0, 80),
     cities: list(params.get("cities"), CITY_IDS),
     types: list(params.get("types"), EMPLOYMENT_TYPE_IDS),
@@ -58,7 +58,7 @@ export function parseFeedState(params: URLSearchParams): FeedState {
 
 export function feedStateToParams(s: FeedState): string {
   const p = new URLSearchParams();
-  if (s.scope === "all") p.set("scope", "all");
+  if (s.scope !== "for_you") p.set("scope", s.scope);
   if (s.q.trim()) p.set("q", s.q.trim());
   if (s.cities.length) p.set("cities", s.cities.join(","));
   if (s.types.length) p.set("types", s.types.join(","));

@@ -4,7 +4,7 @@ import {
   employerLabel,
   locationText,
   PLANS,
-  resolveCvPrices,
+  resolveCvPackPrices,
   resolveLimits,
   resolvePrices,
   type AdminOverviewDto,
@@ -143,7 +143,7 @@ export class AdminService {
       delivery: s.delivery,
       prices: resolvePrices(s),
       planLimits: Object.fromEntries(PLANS.map((p) => [p, resolveLimits(p, s)])) as AdminSettingsDto["planLimits"],
-      cvPrices: resolveCvPrices(s),
+      cvPackPrices: resolveCvPackPrices(s),
       unpaidCvCap: s.unpaidCvCap,
     };
   }

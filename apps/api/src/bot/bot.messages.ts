@@ -155,3 +155,25 @@ export function cvTailorPrompt(title: string, jobId: string, webAppUrl: string):
     reply_markup: keyboard([webAppButton("Tailor my CV", webAppUrl, `/app/cvs/new?mode=tailor&jobId=${jobId}`)]),
   };
 }
+
+/** Someone opened a shared job link. New people also get the pitch for alerts. */
+export function sharedJob(job: { id: string; title: string; company: string | null; closed: boolean }, webAppUrl: string, onboarded: boolean): Reply {
+  const head = `<b>${escapeHtml(job.title)}</b>` + (job.company ? `\n${escapeHtml(job.company)}` : "");
+  const body = job.closed
+    ? "This job has closed, but new ones like it are posted every day."
+    : "Open it to see the full details and how to apply.";
+  const pitch = onboarded
+    ? ""
+    : "\n\nWant jobs like this sent to you the moment they're posted? Set up free alerts in about a minute.";
+  return {
+    text: `${head}\n\n${body}${pitch}` + devHint(webAppUrl),
+    reply_markup: keyboard(
+      [
+        job.closed
+          ? webAppButton("See similar jobs", webAppUrl, `/app/jobs?scope=all&similar=${job.id}`)
+          : webAppButton("View job and apply", webAppUrl, `/app/jobs/${job.id}`),
+      ],
+      onboarded ? [] : [webAppButton("Get free job alerts", webAppUrl, "/app/onboarding")],
+    ),
+  };
+}

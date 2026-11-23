@@ -25,7 +25,8 @@ module.exports = {
       cwd: "./apps/web",
       script: "node_modules/next/dist/bin/next",
       args: "start -p 3003",
-      env: { NODE_ENV: "production" },
+      // Shared job pages (/j/:id) fetch the job server-side: straight to the API on this machine.
+      env: { NODE_ENV: "production", API_INTERNAL_URL: "http://localhost:4040" },
       max_memory_restart: "600M",
     },
   ],

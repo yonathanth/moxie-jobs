@@ -27,8 +27,8 @@ export function PreferenceSections({ group, value, onChange, taxonomy, limits }:
       return (
         <Section
           title="Jobs you want"
-          aside={`${value.professionIds.length}/${limits.maxProfessions}`}
-          description="Pick your profession(s). Not sure? Follow a whole category."
+          aside={`${value.functionIds.length}/${limits.maxFunctions} categories · ${value.professionIds.length}/${limits.maxProfessions} roles`}
+          description="Pick the kinds of jobs you want. A whole category gets you every job in it; open one to pick specific roles."
         >
           <ProfessionPicker
             taxonomy={taxonomy}

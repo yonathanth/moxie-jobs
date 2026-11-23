@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CvContent, CvGenerateRequest, CvPolishTarget } from "@ethio/shared";
+import type { CvContent, CvGenerateRequest, CvPolishTarget, PackCheckoutRequest } from "@ethio/shared";
 import { api, uploadCvFile } from "@/lib/api";
 import { useSession } from "../miniapp/session";
 
@@ -77,9 +77,23 @@ export function useSendCv(id: string) {
   return useMutation({ mutationFn: () => api.cv.send(token, id) });
 }
 
-export function useCvCheckout(id: string) {
+/** Buy a CV pack (optionally for a locked CV, which it then unlocks). */
+export function usePackCheckout() {
   const { token } = useSession();
-  return useMutation({ mutationFn: () => api.cv.checkout(token, id) });
+  return useMutation({ mutationFn: (body: PackCheckoutRequest) => api.checkoutPack(token, body) });
+}
+
+/** Unlock a locked CV with one pack credit. */
+export function useUnlockCv(id: string) {
+  const { token } = useSession();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.cv.unlock(token, id),
+    onSuccess: (cv) => {
+      qc.setQueryData(["cv", id], cv);
+      void qc.invalidateQueries({ queryKey: ["cv", "list"] });
+    },
+  });
 }
 
 export function usePolishCv(id: string) {

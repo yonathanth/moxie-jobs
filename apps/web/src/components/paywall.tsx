@@ -109,7 +109,7 @@ export function PaywallProvider({ children }: { children: React.ReactNode }) {
           plan={open.plan}
           current={me.limits}
           next={planLimits(open.plan)}
-          fromPrice={pricing.data?.prices[open.plan].week ?? null}
+          fromPrice={pricing.data?.prices[open.plan].month ?? null}
           onClose={() => setOpen(null)}
         />
       )}
@@ -159,7 +159,7 @@ function PaywallSheet({
         <p className="mt-1.5 text-[15px] text-hint">{copy.body(current, next, plan)}</p>
         {fromPrice !== null && (
           <p className="mt-3 text-sm font-semibold text-accent-strong">
-            {PLAN_NAME[plan]} from {formatBirr(fromPrice)} a week
+            {PLAN_NAME[plan]}: {formatBirr(fromPrice)} a month
           </p>
         )}
         <div className="mt-5 flex flex-col gap-2">

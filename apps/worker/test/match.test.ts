@@ -71,7 +71,7 @@ describe("matchJob: target", () => {
 
   it("counts only the first N professions on the current plan", () => {
     const u = user({ professionIds: ["nurse", "auditor", "accountant"] });
-    expect(run(job(), u, DEFAULT_PLAN_LIMITS.free).ok).toBe(false); // free = 2 professions
+    expect(run(job(), u, { ...DEFAULT_PLAN_LIMITS.free, maxProfessions: 2 }).ok).toBe(false); // only the first 2 count
     expect(run(job(), u, pro).ok).toBe(true);
   });
 });

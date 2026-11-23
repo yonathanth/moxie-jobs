@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "@ethio/db";
-import { applyPrompt, cvTailorPrompt, planPerks } from "../src/bot/bot.messages";
-import { decodeCursor, employerTypes, encodeCursor, searchTerms, toCard } from "../src/jobs/jobs.mapper";
+import { applyPrompt, cvTailorPrompt, planPerks, sharedJob } from "../src/bot/bot.messages";
+import { decodeCursor, employerTypes, encodeCursor, pinAt, searchTerms, teaserOf, toCard, toPublic } from "../src/jobs/jobs.mapper";
 
 const job = (o: Partial<Job> = {}): Job =>
   ({
@@ -130,5 +130,60 @@ describe("planPerks", () => {
   it("follows the plan's live limits", () => {
     expect(planPerks({ premiumJobs: true, dailyJobCap: null })).toBe("Matching jobs, including NGO, international and overseas ones, now arrive instantly, with no daily limit.");
     expect(planPerks({ premiumJobs: false, dailyJobCap: 30 })).toBe("Matching jobs now arrive instantly, up to 30 a day.");
+  });
+});
+
+describe("saved and shared jobs", () => {
+  const ctx = { premiumJobs: true, match: null, fieldNames: new Map(), sourceTitles: new Map() };
+
+  it("carries the saved flag and category", () => {
+    expect(toCard(job(), { ...ctx, saved: true })).toMatchObject({ saved: true, functionId: "ngo_development" });
+    expect(toCard(job(), ctx).saved).toBe(false);
+  });
+
+  it("cuts a teaser at a sentence or a word", () => {
+    expect(teaserOf("Short one.")).toBe("Short one.");
+    const first = "The Program Officer leads project delivery across four regions and reports to the country director in Addis.";
+    expect(teaserOf(`${first} ${"word ".repeat(60)}`)).toBe(first);
+    const noStop = "word ".repeat(80);
+    expect(teaserOf(noStop, 50).endsWith("…")).toBe(true);
+    expect(teaserOf(noStop, 50).length).toBeLessThanOrEqual(51);
+  });
+
+  it("public view never includes how to apply, and hides premium details", () => {
+    const local = toPublic(job({ employerType: "local_private", company: "Dashen Bank" }), new Date("2026-11-23T00:00:00Z"));
+    expect(local).toMatchObject({ company: "Dashen Bank", closed: false });
+    expect(local.teaser).toContain("Program Officer");
+    expect(JSON.stringify(local)).not.toContain("jobs@stc.org");
+
+    const premium = toPublic(job(), new Date("2026-11-23T00:00:00Z"));
+    expect(premium).toMatchObject({ company: null, teaser: null, skills: [], salary: null });
+
+    expect(toPublic(job(), new Date("2026-12-05T00:00:00Z")).closed).toBe(true);
+    expect(toPublic(job({ status: "expired", deadline: null })).closed).toBe(true);
+  });
+
+  it("bot reply for a shared link: open job, plus the alerts pitch for new people", () => {
+    const url = "https://jobs.example.com";
+    const fresh = sharedJob({ id: "abc", title: "Nurse <ICU>", company: "St. Paul", closed: false }, url, false);
+    expect(fresh.text).toContain("Nurse &lt;ICU&gt;");
+    expect(fresh.text).toContain("free alerts");
+    const buttons = fresh.reply_markup!.inline_keyboard.flat().map((b) => b.text);
+    expect(buttons).toEqual(["View job and apply", "Get free job alerts"]);
+
+    const known = sharedJob({ id: "abc", title: "Nurse", company: null, closed: true }, url, true);
+    expect(known.text).not.toContain("free alerts");
+    expect(known.reply_markup!.inline_keyboard.flat().map((b) => b.text)).toEqual(["See similar jobs"]);
+  });
+});
+
+describe("pinAt", () => {
+  const k = (x: string) => x;
+  it("puts pins 1st and 3rd and removes their old copies", () => {
+    expect(pinAt(["a", "b", "c", "L2", "d"], ["L1", "L2"], [0, 2], k)).toEqual(["L1", "a", "L2", "b", "c", "d"]);
+  });
+  it("copes with short pages and a single pin", () => {
+    expect(pinAt([], ["L1", "L2"], [0, 2], k)).toEqual(["L1", "L2"]);
+    expect(pinAt(["a"], ["L1"], [0, 2], k)).toEqual(["L1", "a"]);
   });
 });

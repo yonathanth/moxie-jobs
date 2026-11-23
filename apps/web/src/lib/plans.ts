@@ -16,7 +16,9 @@ export interface Feature {
 }
 
 export function planFeatures(plan: Plan, l: PlanLimits): Feature[] {
-  const professions = `${l.maxProfessions} professions${l.maxFunctions ? ` + ${l.maxFunctions} whole ${l.maxFunctions === 1 ? "category" : "categories"}` : ""}`;
+  const professions = l.maxFunctions
+    ? `Follow ${l.maxFunctions} job ${l.maxFunctions === 1 ? "category" : "categories"} + ${l.maxProfessions} specific roles`
+    : `Follow ${l.maxProfessions} specific roles`;
   const alerts = l.dailyJobCap === null ? "Unlimited instant alerts" : `Up to ${l.dailyJobCap} instant alerts a day`;
   const premium: Feature = l.premiumJobs
     ? { text: "NGO, UN, AU, embassy, foreign-company & overseas jobs" }
@@ -27,7 +29,7 @@ export function planFeatures(plan: Plan, l: PlanLimits): Feature[] {
   if (l.cvNewPerMonth || l.cvTailorPerMonth !== 0) {
     features.push({ text: `${cvs(l.cvNewPerMonth, "new or improved CV", "new or improved CVs")} + ${cvs(l.cvTailorPerMonth, "tailored CV", "tailored CVs")} a month` });
   } else {
-    features.push({ text: "Pay per CV: see it first, pay only to download" });
+    features.push({ text: "Make CVs free, unlock them with a CV pack" });
   }
   return features;
 }

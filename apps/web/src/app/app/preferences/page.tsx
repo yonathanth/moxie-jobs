@@ -74,8 +74,8 @@ function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: Taxonom
           <Card className="flex items-center gap-3 border-accent-border bg-accent-soft/50 py-3">
             <Crown className="size-4 shrink-0 text-accent-strong" />
             <p className="flex-1 text-[13px] text-accent-strong">
-              <span className="font-semibold">Free plan:</span> {me.limits.maxProfessions} professions,{" "}
-              {me.limits.maxFunctions ? `${me.limits.maxFunctions} whole ${me.limits.maxFunctions === 1 ? "category" : "categories"}` : "no whole categories"}. Upgrade for more.
+              <span className="font-semibold">Free plan:</span> {me.limits.dailyJobCap ?? "unlimited"} alerts a day, local jobs only. Pro adds unlimited alerts and NGO &amp;
+              international jobs.
             </p>
             <ChevronRight className="size-4 text-accent-strong" />
           </Card>

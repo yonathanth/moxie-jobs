@@ -27,7 +27,7 @@ describe("resolveLimits", () => {
   });
 
   it("free: 10 alerts a day, no premium jobs, no categories; paid plans unlimited with premium jobs", () => {
-    expect(DEFAULT_PLAN_LIMITS.free).toMatchObject({ dailyJobCap: 10, premiumJobs: false, maxFunctions: 0 });
+    expect(DEFAULT_PLAN_LIMITS.free).toMatchObject({ dailyJobCap: 10, premiumJobs: false, maxFunctions: 3, maxProfessions: 10 });
     expect(DEFAULT_PLAN_LIMITS.pro).toMatchObject({ dailyJobCap: null, premiumJobs: true });
   });
 
@@ -52,7 +52,7 @@ describe("resolvePrices", () => {
   it("merges partial overrides over the defaults", () => {
     expect(resolvePrices(DEFAULT_SETTINGS)).toEqual(DEFAULT_PRICES);
     const p = resolvePrices(settingsSchema.parse({ prices: { pro: { month: 99 } } }));
-    expect(p.pro).toEqual({ week: 39, month: 99, quarter: 329 });
+    expect(p.pro).toEqual({ ...DEFAULT_PRICES.pro, month: 99 });
     expect(p.career).toEqual(DEFAULT_PRICES.career);
   });
 });

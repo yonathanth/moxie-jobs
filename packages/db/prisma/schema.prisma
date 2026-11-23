@@ -41,6 +41,11 @@ model User {
   // The one reminder sent to people who opened the bot but never finished setup.
   onboardingNudgedAt DateTime?
   lastSeenAt         DateTime?
+  // Personal details printed on every CV ({ name, email, phone, location }), asked once in the CV flow.
+  cvContact          Json?
+  // CV pack credits (never expire): used after the plan's monthly allowance.
+  cvNewCredits       Int       @default(0)
+  cvTailorCredits    Int       @default(0)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -49,6 +54,7 @@ model User {
   functions   UserFunction[]
   payments    Payment[]
   cvs         CvDocument[]
+  savedJobs   SavedJob[]
 
   @@index([createdAt])
 }
@@ -250,6 +256,7 @@ model Job {
 
   sightings  JobSighting[]
   deliveries Delivery[]
+  savedBy    SavedJob[]
 
   @@index([status, firstSeenAt])
   @@index([professionId, status])
@@ -296,6 +303,19 @@ model JobSighting {
 
   @@id([jobId, rawPostId])
   @@index([rawPostId])
+}
+
+// Jobs a user bookmarked in the Mini App ("Saved" tab).
+model SavedJob {
+  userId    String
+  jobId     String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobId])
+  @@index([userId, createdAt])
+  @@index([jobId])
 }
 
 model Delivery {

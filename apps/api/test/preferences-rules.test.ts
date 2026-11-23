@@ -13,7 +13,7 @@ const parse = (v: unknown) => preferencesInputSchema.parse(v);
 describe("checkPreferences", () => {
   it("accepts valid preferences within limits", () => {
     const p = parse({ professionIds: ["accountant"], fieldOfStudyIds: ["accounting"], locationIds: ["addis_ababa"] });
-    expect(checkPreferences(p, taxonomy, DEFAULT_PLAN_LIMITS.free)).toEqual([]);
+    expect(checkPreferences(p, taxonomy, { ...DEFAULT_PLAN_LIMITS.free, maxProfessions: 2 })).toEqual([]);
   });
 
   it("flags unknown ids", () => {
@@ -24,7 +24,7 @@ describe("checkPreferences", () => {
 
   it("enforces the plan's caps", () => {
     const p = parse({ professionIds: ["accountant", "auditor", "cashier"] });
-    expect(checkPreferences(p, taxonomy, DEFAULT_PLAN_LIMITS.free)).toEqual([
+    expect(checkPreferences(p, taxonomy, { ...DEFAULT_PLAN_LIMITS.free, maxProfessions: 2 })).toEqual([
       { path: "professionIds", message: "Your plan allows up to 2 professions" },
     ]);
     expect(checkPreferences(p, taxonomy, DEFAULT_PLAN_LIMITS.pro)).toEqual([]);

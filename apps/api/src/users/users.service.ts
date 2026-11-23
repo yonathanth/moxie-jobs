@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { User } from "@ethio/db";
-import type { MeDto, MeStats } from "@ethio/shared";
+import type { CvContact, MeDto, MeStats } from "@ethio/shared";
 import { ENV, type Env } from "../config/config.module";
 import { PrismaService } from "../prisma/prisma.service";
 import { effectivePlan, resolveLimits } from "../settings/plan";
@@ -80,7 +80,12 @@ export class UsersService {
       onboarded: user.onboardedAt !== null,
       isAdmin: this.isAdmin(user),
       stats: await this.stats(user.id, now),
+      cvContact: (user.cvContact as CvContact | null) ?? null,
     };
+  }
+
+  async setCvContact(userId: string, contact: CvContact): Promise<User> {
+    return this.prisma.user.update({ where: { id: userId }, data: { cvContact: { ...contact } } });
   }
 
   private async stats(userId: string, now: Date): Promise<MeStats> {

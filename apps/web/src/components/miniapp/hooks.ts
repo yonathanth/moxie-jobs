@@ -1,8 +1,8 @@
 "use client";
 
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import type { CheckoutRequest, JobFeedQuery, PreferencesInput, ResolveTermRequest } from "@ethio/shared";
+import type { CheckoutRequest, CvContact, JobCardDto, JobFeedPage, JobFeedQuery, PreferencesInput, ResolveTermRequest } from "@ethio/shared";
 import { api } from "@/lib/api";
 import { getWebApp } from "@/lib/telegram";
 import { useSession } from "./session";
@@ -34,6 +34,12 @@ export function useSetAlertsPaused() {
     mutationFn: (alertsPaused: boolean) => api.updateMe(token, { alertsPaused }),
     onSuccess: setMe,
   });
+}
+
+/** Saves the personal details printed on every CV. */
+export function useSaveCvContact() {
+  const { token, setMe } = useSession();
+  return useMutation({ mutationFn: (c: CvContact) => api.setCvContact(token, c), onSuccess: setMe });
 }
 
 /** Shows Telegram's native back button while `onBack` is set. */
@@ -102,6 +108,29 @@ export function useJobFeed(query: Omit<JobFeedQuery, "cursor" | "limit">) {
 export function useJob(id: string, enabled = true) {
   const { token } = useSession();
   return useQuery({ queryKey: ["job", id], queryFn: () => api.job(token, id), enabled: enabled && !!id });
+}
+
+/**
+ * Save / unsave a job. Optimistic: every cached copy (feed pages and the job itself) flips at once;
+ * the Saved tab is refetched afterwards so it gains or loses the job.
+ */
+export function useToggleSaved() {
+  const { token } = useSession();
+  const qc = useQueryClient();
+  const setEverywhere = (id: string, saved: boolean) => {
+    qc.setQueryData<JobCardDto>(["job", id], (j) => (j ? { ...j, saved } : j));
+    qc.setQueriesData<InfiniteData<JobFeedPage>>({ queryKey: ["jobs"] }, (data) =>
+      data
+        ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map((j) => (j.id === id ? { ...j, saved } : j)) })) }
+        : data,
+    );
+  };
+  return useMutation({
+    mutationFn: ({ id, saved }: { id: string; saved: boolean }) => api.setSaved(token, id, saved),
+    onMutate: ({ id, saved }) => setEverywhere(id, saved),
+    onError: (_err, { id, saved }) => setEverywhere(id, !saved),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["jobs", { scope: "saved" }], exact: false, refetchType: "inactive" }),
+  });
 }
 
 /** "Not listed": maps typed text to the closest degrees/professions on the server (cached, cheap). */

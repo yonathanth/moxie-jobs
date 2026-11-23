@@ -134,6 +134,19 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     pm.command("start", async (ctx) => {
       const existing = await this.users.findByTelegramId(ctx.from.id);
       const user = await this.users.upsertFromTelegram(ctx.from, { startParam: ctx.match || undefined });
+      // A shared job link (jobs.gomoxie.app/j/:id → t.me/<bot>?start=job_<id>): show that job first.
+      const shared = /^job_([0-9a-f-]{36})$/i.exec(ctx.match ?? "");
+      if (shared) {
+        const job = await this.prisma.job.findUnique({
+          where: { id: shared[1] },
+          select: { id: true, title: true, company: true, status: true, deadline: true },
+        });
+        if (job && job.status !== "hidden" && job.status !== "review") {
+          const closed = job.status === "expired" || (job.deadline !== null && job.deadline <= new Date());
+          await reply(ctx, M.sharedJob({ id: job.id, title: job.title, company: job.company, closed }, url(), !!existing?.onboardedAt));
+          return;
+        }
+      }
       if (existing?.onboardedAt) {
         await reply(ctx, M.welcomeBack(user.firstName, url(), user.alertsPaused));
       } else {

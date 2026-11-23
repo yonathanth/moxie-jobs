@@ -5,20 +5,22 @@ import { Check, CheckCircle2, Clock, Crown, Lock, ShieldCheck, XCircle } from "l
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BILLING_PERIODS,
+  CV_PACK_CONTENTS,
+  PAID_PLANS,
   PERIOD_LABEL,
   PLAN_NAME,
   PLAN_RANK,
-  PLANS,
+  SOLD_PERIODS,
   type BillingPeriod,
+  type CvPackId,
   type MeDto,
   type PaidPlan,
-  type Plan,
   type PricingDto,
 } from "@ethio/shared";
-import { BottomNav } from "@/components/BottomNav";
 import { ScreenSkeleton } from "@/components/skeletons";
 import { useBackButton, useCheckout, usePayment, usePricing, useRefreshMe } from "@/components/miniapp/hooks";
+import { PackCards } from "@/components/cv/PackCards";
+import { usePackCheckout } from "@/components/cv/hooks";
 import { useSession } from "@/components/miniapp/session";
 import { Badge, Button, Card, CenteredMessage, ErrorText, IconTile, PageHeader, Screen, Spinner } from "@/components/ui";
 import { formatBirr, formatDate, PERIOD_SHORT, PLAN_TAGLINE, planFeatures, savingVsMonthly } from "@/lib/plans";
@@ -36,8 +38,9 @@ export default function PlansPage() {
   const { me } = useSession();
   const pricing = usePricing();
   const checkout = useCheckout();
-  const [period, setPeriod] = useState<BillingPeriod>("month");
-  const [pending, setPending] = useState<{ id: string; url: string; plan: PaidPlan } | null>(null);
+  const [period, setPeriod] = useState<(typeof SOLD_PERIODS)[number]>("month");
+  const packCheckout = usePackCheckout();
+  const [pending, setPending] = useState<{ id: string; url: string; plan: PaidPlan | CvPackId } | null>(null);
 
   useBackButton(() => (pending ? setPending(null) : router.push("/app")));
 
@@ -84,8 +87,8 @@ export default function PlansPage() {
 
       <PeriodToggle value={period} onChange={setPeriod} pricing={pricing.data} />
 
-      <div className="mt-4 flex flex-col gap-3">
-        {PLANS.map((plan) => (
+      <div className="mt-5 flex flex-col gap-5">
+        {PAID_PLANS.map((plan) => (
           <PlanCard
             key={plan}
             plan={plan}
@@ -105,19 +108,54 @@ export default function PlansPage() {
         </div>
       )}
 
+      <section id="packs" className="mt-8 scroll-mt-4">
+        <h2 className="px-1 text-[18px] font-bold tracking-tight">CV packs</h2>
+        <p className="mb-4 mt-0.5 px-1 text-[13px] text-hint">Need more CVs? Buy credits once, use them whenever. Works with any plan, or none.</p>
+        <PackCards
+          packs={pricing.data.packs}
+          busyId={packCheckout.isPending ? packCheckout.variables?.pack : null}
+          disabled={packCheckout.isPending || checkout.isPending}
+          onBuy={(pack) => {
+            haptic.select();
+            packCheckout.mutate(
+              { pack },
+              {
+                onSuccess: (res) => {
+                  setPending({ id: res.paymentId, url: res.url, plan: pack });
+                  openCheckout(res.url);
+                },
+                onError: () => haptic.error(),
+              },
+            );
+          }}
+        />
+        {packCheckout.error && (
+          <div className="mt-3 px-1">
+            <ErrorText>{packCheckout.error.message}</ErrorText>
+          </div>
+        )}
+      </section>
+
       <p className="mt-6 flex items-center justify-center gap-1.5 px-6 text-center text-xs text-hint">
         <ShieldCheck className="size-3.5 shrink-0" />
         Secure payment by SantimPay. One-time payment, no auto-renewal.
       </p>
-      <BottomNav />
     </Screen>
   );
 }
 
-function PeriodToggle({ value, onChange, pricing }: { value: BillingPeriod; onChange: (p: BillingPeriod) => void; pricing: PricingDto }) {
+function PeriodToggle({
+  value,
+  onChange,
+  pricing,
+}: {
+  value: (typeof SOLD_PERIODS)[number];
+  onChange: (p: (typeof SOLD_PERIODS)[number]) => void;
+  pricing: PricingDto;
+}) {
   return (
-    <div className="mt-5 grid grid-cols-3 gap-1 rounded-xl border border-separator bg-surface p-1">
-      {BILLING_PERIODS.map((p) => {
+    <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl border border-separator bg-surface p-1">
+      {SOLD_PERIODS.map((p) => {
         const save = savingVsMonthly(pricing.prices.pro, p);
         return (
           <button
@@ -143,6 +181,18 @@ function PeriodToggle({ value, onChange, pricing }: { value: BillingPeriod; onCh
   );
 }
 
+/** Soft tints per plan (as on gomoxie.app's plan cards). */
+const PLAN_STYLE: Record<PaidPlan, { card: string; crown: string }> = {
+  pro: {
+    card: "border-accent-border bg-[linear-gradient(135deg,#fff1e8_0%,#fff8f3_45%,#ffffff_100%)]",
+    crown: "text-accent",
+  },
+  career: {
+    card: "border-sky-200 bg-[linear-gradient(135deg,#e6f4fb_0%,#f3f9fd_45%,#ffffff_100%)]",
+    crown: "text-sky-600",
+  },
+};
+
 function PlanCard({
   plan,
   period,
@@ -152,7 +202,7 @@ function PlanCard({
   disabled,
   onBuy,
 }: {
-  plan: Plan;
+  plan: PaidPlan;
   period: BillingPeriod;
   me: MeDto;
   pricing: PricingDto;
@@ -163,44 +213,40 @@ function PlanCard({
   const limits = pricing.limits[plan];
   const features = planFeatures(plan, limits);
   const popular = plan === "pro";
-  const paidActive = me.plan !== "free";
-  const isCurrent = paidActive ? me.plan === plan : plan === "free" && !me.beta;
-  const coveredByHigher = paidActive && plan !== "free" && PLAN_RANK[me.plan] > PLAN_RANK[plan];
+  const isCurrent = me.plan === plan;
+  const coveredByHigher = me.plan !== "free" && PLAN_RANK[me.plan] > PLAN_RANK[plan];
+  const style = PLAN_STYLE[plan];
+  const perMonth = period === "quarter" ? Math.round(pricing.prices[plan].quarter / 3) : null;
 
   return (
-    <Card className={clsx("relative", popular && "border-neutral-300 ring-1 ring-accent/30")}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
+    <div className={clsx("relative rounded-2xl border p-4 shadow-[0_12px_32px_-24px_rgba(15,17,21,0.3)]", style.card)}>
+      {popular && (
+        <span className="absolute -top-2.5 right-4 rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-[0_4px_10px_-4px_rgba(255,94,31,0.6)]">
+          Most popular
+        </span>
+      )}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
+            <Crown className={clsx("size-4", style.crown)} />
             <h2 className="text-lg font-bold tracking-tight">{PLAN_NAME[plan]}</h2>
-            {popular && <Badge tone="accent">Most popular</Badge>}
             {isCurrent && <Badge tone="emerald">Current</Badge>}
           </div>
-          <p className="text-[13px] text-hint">{PLAN_TAGLINE[plan]}</p>
+          <p className="mt-0.5 text-[13px] text-hint">{PLAN_TAGLINE[plan]}</p>
         </div>
-        {plan !== "free" && <Crown className={clsx("size-5", plan === "career" ? "text-accent" : "text-hint-light")} />}
+        <div className="shrink-0 text-right">
+          <p>
+            <span className="text-[24px] font-bold tracking-tight">{formatBirr(pricing.prices[plan][period])}</span>
+            <span className="ml-0.5 text-[13px] text-hint">{PERIOD_SHORT[period]}</span>
+          </p>
+          {perMonth && <p className="text-[12px] text-hint">{formatBirr(perMonth)} a month</p>}
+        </div>
       </div>
 
-      <p className="mt-3">
-        {plan === "free" ? (
-          <span className="text-[28px] font-bold tracking-tight">0 Br</span>
-        ) : (
-          <>
-            <span className="text-[28px] font-bold tracking-tight">{formatBirr(pricing.prices[plan][period])}</span>
-            <span className="ml-1 text-sm text-hint">{PERIOD_SHORT[period]}</span>
-          </>
-        )}
-      </p>
-
-      <ul className="mt-3 flex flex-col gap-2 border-t border-separator-subtle pt-3">
+      <ul className="mt-4 flex flex-col gap-2 border-t border-black/5 pt-3">
         {features.map((f) => (
           <li key={f.text} className={clsx("flex items-start gap-2 text-[14px]", f.missing ? "text-hint-light" : "text-text")}>
-            <span
-              className={clsx(
-                "mt-0.5 grid size-4.5 shrink-0 place-items-center rounded-full",
-                f.missing ? "bg-pill text-hint-light" : plan === "free" ? "bg-pill text-hint" : "bg-ink text-white",
-              )}
-            >
+            <span className={clsx("mt-0.5 grid size-4.5 shrink-0 place-items-center rounded-full", f.missing ? "bg-pill text-hint-light" : "bg-ink text-white")}>
               {f.missing ? <Lock className="size-2.5" /> : <Check className="size-2.5" strokeWidth={3.5} />}
             </span>
             <span>
@@ -211,28 +257,26 @@ function PlanCard({
         ))}
       </ul>
 
-      {plan !== "free" && (
-        <div className="mt-4">
-          {coveredByHigher ? (
-            <Button variant="secondary" disabled>
-              Included in {PLAN_NAME[me.plan]}
-            </Button>
-          ) : (
-            <Button variant={popular ? "accent" : "primary"} loading={busy} disabled={disabled} onClick={() => onBuy(plan)}>
-              {me.plan === plan ? `Extend ${PLAN_NAME[plan]}` : `Get ${PLAN_NAME[plan]}`} · {formatBirr(pricing.prices[plan][period])}
-            </Button>
-          )}
-          {me.plan === plan && me.planExpiresAt && (
-            <p className="mt-2 text-center text-xs text-hint">Active until {formatDate(me.planExpiresAt)}. Extending adds time to the end.</p>
-          )}
-        </div>
-      )}
-    </Card>
+      <div className="mt-4">
+        {coveredByHigher ? (
+          <Button variant="secondary" disabled>
+            Included in {PLAN_NAME[me.plan]}
+          </Button>
+        ) : (
+          <Button variant={popular ? "accent" : "primary"} loading={busy} disabled={disabled} onClick={() => onBuy(plan)}>
+            {isCurrent ? `Extend ${PLAN_NAME[plan]}` : `Get ${PLAN_NAME[plan]}`} · {formatBirr(pricing.prices[plan][period])}
+          </Button>
+        )}
+        {isCurrent && me.planExpiresAt && (
+          <p className="mt-2 text-center text-xs text-hint">Active until {formatDate(me.planExpiresAt)}. Extending adds time to the end.</p>
+        )}
+      </div>
+    </div>
   );
 }
 
 /** Shown after the checkout opens: polls until SantimPay confirms (or the user gives up). */
-function Waiting({ payment, onDone }: { payment: { id: string; url: string; plan: PaidPlan }; onDone: () => void }) {
+function Waiting({ payment, onDone }: { payment: { id: string; url: string; plan: PaidPlan | CvPackId }; onDone: () => void }) {
   const router = useRouter();
   const status = usePayment(payment.id);
   const refresh = useRefreshMe();
@@ -248,6 +292,23 @@ function Waiting({ payment, onDone }: { payment: { id: string; url: string; plan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  if (state === "paid" && payment.plan.startsWith("cv_pack")) {
+    const pack = CV_PACK_CONTENTS[payment.plan as CvPackId];
+    return (
+      <CenteredMessage
+        icon={
+          <IconTile tone="emerald">
+            <CheckCircle2 className="size-5" />
+          </IconTile>
+        }
+        title={`Your ${pack.name} pack is ready`}
+        body={`${pack.newCvs} new or improved CVs and ${pack.tailored} tailored CVs added. They never expire.`}
+      >
+        <Button onClick={() => router.push("/app/cvs")}>Go to my CVs</Button>
+      </CenteredMessage>
+    );
+  }
+
   if (state === "paid") {
     return (
       <CenteredMessage
@@ -256,7 +317,7 @@ function Waiting({ payment, onDone }: { payment: { id: string; url: string; plan
             <CheckCircle2 className="size-5" />
           </IconTile>
         }
-        title={`You're on ${PLAN_NAME[payment.plan]}`}
+        title={`You're on ${PLAN_NAME[payment.plan as PaidPlan]}`}
         body={
           status.data?.periodEnd
             ? `Active until ${formatDate(status.data.periodEnd)}. Matching NGO, international and overseas jobs are on their way.`

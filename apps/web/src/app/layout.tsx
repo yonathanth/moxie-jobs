@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
+import { SITE_URL } from "@/lib/config";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: { default: "GoMoxie Jobs: jobs in Ethiopia that fit you", template: "%s · GoMoxie Jobs" },
   description:
     "New jobs from Ethiopia's job channels and websites, matched to your profession and sent to you on Telegram.",

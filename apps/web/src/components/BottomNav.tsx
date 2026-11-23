@@ -4,6 +4,9 @@ import clsx from "clsx";
 import { Briefcase, FileText, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { useSession } from "./miniapp/session";
 
 const ITEMS = [
   { href: "/app/jobs", label: "Jobs", icon: Briefcase, match: (p: string) => p.startsWith("/app/jobs") },
@@ -12,11 +15,23 @@ const ITEMS = [
   { href: "/app", label: "Profile", icon: UserRound, match: (p: string) => p === "/app" || p.startsWith("/app/plans") || p.startsWith("/app/preferences") },
 ] as const;
 
-/** Main sections of the Mini App. Shown on top-level pages only (not editors or detail pages). */
+/** Top-level pages show the bar; editors, detail pages, onboarding and admin don't. */
+const SHOWN_ON = new Set(["/app", "/app/jobs", "/app/cvs", "/app/plans"]);
+
+/**
+ * Main sections of the Mini App, rendered once by the Mini App shell.
+ * Portalled to <body> so no page wrapper (a transform, filter or animation) can ever
+ * turn `position: fixed` into "scrolls with the page".
+ */
 export function BottomNav() {
-  const path = usePathname();
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-separator bg-bg/90 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+  const path = usePathname().replace(/\/$/, "") || "/";
+  const { me } = useSession();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted || !me.onboarded || !SHOWN_ON.has(path)) return null;
+
+  return createPortal(
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-separator bg-bg/90 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       <ul className="mx-auto flex max-w-lg">
         {ITEMS.map(({ href, label, icon: Icon, match }) => {
           const active = match(path);
@@ -37,6 +52,7 @@ export function BottomNav() {
           );
         })}
       </ul>
-    </nav>
+    </nav>,
+    document.body,
   );
 }

@@ -2,6 +2,7 @@ import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Loader2, X } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Portal } from "./Portal";
 
 /** Class names where later ones win (a caller's "w-auto" overrides the component's "w-full"). */
 export function cx(...classes: ClassValue[]): string {
@@ -172,24 +173,23 @@ export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "acce
   );
 }
 
-// GoMoxie's soft glossy icon tiles (resume: create-flow/OptionCard ICON_TONES).
+// Quiet icon tiles: one neutral square for every tone, only the icon carries the colour.
 const ICON_TONES = {
-  accent:
-    "from-accent-mid to-accent border-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-4px_color-mix(in_srgb,var(--accent-light)_35%,transparent)]",
-  sky: "from-sky-500 to-sky-600 border-sky-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-4px_rgba(14,165,233,0.3)]",
-  violet: "from-violet-500 to-violet-600 border-violet-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-4px_rgba(139,92,246,0.35)]",
-  emerald: "from-emerald-500 to-emerald-600 border-emerald-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-4px_rgba(16,185,129,0.3)]",
-  neutral: "from-white to-neutral-100 border-neutral-200 text-neutral-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-4px_rgba(0,0,0,0.12)]",
+  accent: "text-accent-strong",
+  sky: "text-sky-600",
+  violet: "text-violet-600",
+  emerald: "text-emerald-600",
+  neutral: "text-neutral-500",
 } as const;
 export type IconTone = keyof typeof ICON_TONES;
 
-/** Glossy icon tile, as on gomoxie.app. */
+/** Icon in a small neutral tile (hairline border, faint fill); the tone colours the icon. */
 export function IconTile({ children, tone = "accent", size = "md" }: { children: ReactNode; tone?: IconTone; size?: "sm" | "md" }) {
   return (
     <span
       className={cx(
-        "grid shrink-0 place-items-center border bg-linear-to-b",
-        size === "sm" ? "size-9 rounded-lg [&_svg]:size-4" : "size-10 rounded-xl",
+        "grid shrink-0 place-items-center border border-separator bg-neutral-50",
+        size === "sm" ? "size-9 rounded-lg [&_svg]:size-4" : "size-10 rounded-xl [&_svg]:size-[18px]",
         ICON_TONES[tone],
       )}
     >
@@ -203,12 +203,14 @@ export function Skeleton({ className }: { className?: string }) {
   return <span aria-hidden="true" className={cx("skeleton block rounded-md", className)} />;
 }
 
-/** Bottom action bar that stays above the keyboard/home indicator. */
+/** Bottom action bar, always pinned to the screen bottom (portalled, see Portal). Pages keep pb-32+ so content clears it. */
 export function StickyFooter({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-10 border-t border-separator bg-bg/90 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-      <div className="mx-auto flex max-w-lg flex-col gap-2">{children}</div>
-    </div>
+    <Portal>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-separator bg-bg/90 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+        <div className="mx-auto flex max-w-lg flex-col gap-2">{children}</div>
+      </div>
+    </Portal>
   );
 }
 
@@ -291,6 +293,7 @@ export function ErrorText({ children }: { children: ReactNode }) {
 /** A bottom sheet over the page (score details, template picker, user details). */
 export function Sheet({ title, onClose, children, footer }: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   return (
+    <Portal>
     <div className="fixed inset-0 z-40 flex items-end justify-center" role="dialog" aria-modal="true">
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/40 animate-[fade-in_0.2s_ease-out]" />
       <div className="relative flex max-h-[88dvh] w-full max-w-lg flex-col rounded-t-3xl bg-surface shadow-2xl animate-[sheet-up_0.24s_ease-out]">
@@ -305,5 +308,6 @@ export function Sheet({ title, onClose, children, footer }: { title: ReactNode; 
         {footer && <div className="border-t border-separator px-5 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">{footer}</div>}
       </div>
     </div>
+    </Portal>
   );
 }

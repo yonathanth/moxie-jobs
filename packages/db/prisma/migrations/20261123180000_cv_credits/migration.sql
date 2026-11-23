@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "cvNewCredits" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "cvTailorCredits" INTEGER NOT NULL DEFAULT 0;
+

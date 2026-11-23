@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Job, Prisma, User } from "@ethio/db";
-import { effectivePlan, resolveLimits, type JobCardDto, type JobFeedPage, type JobFeedQuery, type PostedWithin } from "@ethio/shared";
+import { effectivePlan, resolveLimits, type JobCardDto, type JobFeedPage, type JobFeedQuery, type PostedWithin, type PublicJobDto } from "@ethio/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { SettingsService } from "../settings/settings.service";
-import { decodeCursor, employerTypes, encodeCursor, searchTerms, toCard } from "./jobs.mapper";
+import { decodeCursor, employerTypes, encodeCursor, pinAt, searchTerms, toCard, toPublic } from "./jobs.mapper";
 
 const DAY = 24 * 3_600_000;
 const POSTED_MS: Record<PostedWithin, number> = { "1d": DAY, "3d": 3 * DAY, "7d": 7 * DAY, "30d": 30 * DAY };
@@ -60,9 +60,11 @@ export class JobsService {
     };
   }
 
-  /** Open jobs matching the search and filters. */
-  private jobWhere(q: JobFeedQuery, now: Date, excludeUnpaid = false): Prisma.JobWhereInput {
-    const and: Prisma.JobWhereInput[] = [{ status: "active" }, { OR: [{ deadline: null }, { deadline: { gt: now } }] }];
+  /** Jobs matching the search and filters: open ones only, or (saved tab) closed ones too. */
+  private jobWhere(q: JobFeedQuery, now: Date, excludeUnpaid = false, openOnly = true): Prisma.JobWhereInput {
+    const and: Prisma.JobWhereInput[] = openOnly
+      ? [{ status: "active" }, { OR: [{ deadline: null }, { deadline: { gt: now } }] }]
+      : [{ status: { in: ["active", "expired"] } }];
     if (excludeUnpaid) and.push({ NOT: { OR: [{ qualityFlags: { has: "unpaid" } }, { employmentType: "volunteer" }] } });
     for (const term of searchTerms(q.q)) {
       and.push({
@@ -88,7 +90,27 @@ export class JobsService {
     const limit = Math.min(Math.max(q.limit ?? 20, 5), 30);
     const cursor = decodeCursor(q.cursor);
     const [{ premiumJobs, excludeUnpaid }, maps] = await Promise.all([this.userView(user), this.lookupMaps()]);
-    const card = (job: Job, match: JobCardDto["match"]) => toCard(job, { premiumJobs, match, ...maps });
+    const card = (job: Job, match: JobCardDto["match"], saved: boolean) => toCard(job, { premiumJobs, match, saved, ...maps });
+
+    if (q.scope === "saved") {
+      const rows = await this.prisma.savedJob.findMany({
+        where: {
+          userId: user.id,
+          job: this.jobWhere(q, now, false, false),
+          ...(cursor ? { OR: [{ createdAt: { lt: cursor.at } }, { createdAt: cursor.at, jobId: { lt: cursor.id } }] } : {}),
+        },
+        orderBy: [{ createdAt: "desc" }, { jobId: "desc" }],
+        take: limit + 1,
+        include: { job: true },
+      });
+      const page = rows.slice(0, limit);
+      const matches = await this.matchesFor(user.id, page.map((r) => r.jobId));
+      const last = rows[limit - 1];
+      return {
+        items: page.map((r) => card(r.job, matches.get(r.jobId) ?? null, true)),
+        nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.jobId) : null,
+      };
+    }
 
     if (q.scope === "for_you") {
       const rows = await this.prisma.delivery.findMany({
@@ -101,10 +123,21 @@ export class JobsService {
         take: limit + 1,
         include: { job: true },
       });
-      const page = rows.slice(0, limit);
+      let page = rows.slice(0, limit);
       const last = rows[limit - 1];
+      // Plans without premium jobs: show what they're missing near the top (1st and 3rd), first page only.
+      if (!cursor && !premiumJobs) {
+        const locked = await this.prisma.delivery.findMany({
+          where: { userId: user.id, status: { in: ["locked", "teased"] }, job: this.jobWhere(q, now, excludeUnpaid) },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: 2,
+          include: { job: true },
+        });
+        page = pinAt(page, locked, [0, 2], (d) => d.id);
+      }
+      const saved = await this.savedSet(user.id, page.map((d) => d.jobId));
       return {
-        items: page.map((d) => card(d.job, matchOf(d.status, d.error))),
+        items: page.map((d) => card(d.job, matchOf(d.status, d.error), saved.has(d.jobId))),
         nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
         ...(cursor || premiumJobs
           ? {}
@@ -130,17 +163,11 @@ export class JobsService {
       take: limit + 1,
     });
     const page = jobs.slice(0, limit);
-    const delivered = new Map(
-      (
-        await this.prisma.delivery.findMany({
-          where: { userId: user.id, jobId: { in: page.map((j) => j.id) } },
-          select: { jobId: true, status: true, error: true },
-        })
-      ).map((d) => [d.jobId, matchOf(d.status, d.error)]),
-    );
+    const ids = page.map((j) => j.id);
+    const [delivered, saved] = await Promise.all([this.matchesFor(user.id, ids), this.savedSet(user.id, ids)]);
     const last = page[page.length - 1];
     return {
-      items: page.map((j) => card(j, delivered.get(j.id) ?? null)),
+      items: page.map((j) => card(j, delivered.get(j.id) ?? null, saved.has(j.id))),
       nextCursor: jobs.length > limit && last ? encodeCursor(last.firstSeenAt, last.id) : null,
     };
   }
@@ -148,11 +175,44 @@ export class JobsService {
   async one(user: User, id: string): Promise<JobCardDto> {
     const job = await this.prisma.job.findUnique({ where: { id } });
     if (!job || job.status === "hidden" || job.status === "review") throw new NotFoundException("Job not found");
-    const [{ premiumJobs }, maps, delivery] = await Promise.all([
+    const [{ premiumJobs }, maps, delivery, saved] = await Promise.all([
       this.userView(user),
       this.lookupMaps(),
       this.prisma.delivery.findUnique({ where: { userId_jobId: { userId: user.id, jobId: id } }, select: { status: true, error: true } }),
+      this.prisma.savedJob.findUnique({ where: { userId_jobId: { userId: user.id, jobId: id } }, select: { jobId: true } }),
     ]);
-    return toCard(job, { premiumJobs, match: delivery ? matchOf(delivery.status, delivery.error) : null, ...maps });
+    return toCard(job, { premiumJobs, match: delivery ? matchOf(delivery.status, delivery.error) : null, saved: !!saved, ...maps });
+  }
+
+  /** Bookmark (idempotent). */
+  async save(user: User, id: string): Promise<{ saved: true }> {
+    const job = await this.prisma.job.findUnique({ where: { id }, select: { status: true } });
+    if (!job || job.status === "hidden" || job.status === "review") throw new NotFoundException("Job not found");
+    await this.prisma.savedJob.upsert({ where: { userId_jobId: { userId: user.id, jobId: id } }, create: { userId: user.id, jobId: id }, update: {} });
+    return { saved: true };
+  }
+
+  async unsave(user: User, id: string): Promise<{ saved: false }> {
+    await this.prisma.savedJob.deleteMany({ where: { userId: user.id, jobId: id } });
+    return { saved: false };
+  }
+
+  /** A shared job link: public teaser, no sign-in. */
+  async publicOne(id: string): Promise<PublicJobDto> {
+    const job = await this.prisma.job.findUnique({ where: { id } });
+    if (!job || job.status === "hidden" || job.status === "review") throw new NotFoundException("Job not found");
+    return toPublic(job);
+  }
+
+  private async matchesFor(userId: string, jobIds: string[]): Promise<Map<string, JobCardDto["match"]>> {
+    if (!jobIds.length) return new Map();
+    const rows = await this.prisma.delivery.findMany({ where: { userId, jobId: { in: jobIds } }, select: { jobId: true, status: true, error: true } });
+    return new Map(rows.map((d) => [d.jobId, matchOf(d.status, d.error)]));
+  }
+
+  private async savedSet(userId: string, jobIds: string[]): Promise<Set<string>> {
+    if (!jobIds.length) return new Set();
+    const rows = await this.prisma.savedJob.findMany({ where: { userId, jobId: { in: jobIds } }, select: { jobId: true } });
+    return new Set(rows.map((r) => r.jobId));
   }
 }
