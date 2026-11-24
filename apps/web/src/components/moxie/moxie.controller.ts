@@ -1,0 +1,144 @@
+import { gsap } from "gsap";
+import { endTickle, MOXIE_PRESETS, tickleGiggle, toNeutral, updateArm } from "./moxie.animations";
+import type { MoxieAnimation, MoxieParts, MoxieTimelineFactory } from "./moxie.types";
+
+/** Time to ease back to neutral before starting a new animation. */
+const SETTLE = 0.35;
+/** How long a reduced-motion reaction holds its pose before relaxing. */
+const REDUCED_HOLD = 1.4;
+
+interface ControllerOptions {
+  reducedMotion: boolean;
+  /** Wears the Pro crown through every animation. */
+  crowned?: boolean;
+  onComplete?: (animation: MoxieAnimation) => void;
+  /** Each time a loop starts another cycle — so things on the page can follow her beat. */
+  onCycle?: (animation: MoxieAnimation) => void;
+}
+
+/**
+ * Runs Moxie's animations on one set of parts. Only one timeline is live at
+ * a time; starting a new animation kills the old one and eases out of
+ * whatever pose it left behind, so any animation can interrupt any other.
+ * Works entirely outside React — nothing here triggers a re-render.
+ */
+export class MoxieController {
+  private timeline: gsap.core.Timeline | null = null;
+  /** The tickle giggle, while it plays (the animation underneath is paused). */
+  private giggle: gsap.core.Timeline | null = null;
+  private paused = false;
+  /** The animation currently showing ("idle" again once a reaction has finished). */
+  current: MoxieAnimation | null = null;
+
+  /** Keeps the big claw's arm joined to its pincer, whatever is moving it. */
+  private readonly syncArm = () => updateArm(this.parts);
+
+  constructor(
+    private readonly parts: MoxieParts,
+    private readonly options: ControllerOptions,
+  ) {
+    gsap.ticker.add(this.syncArm);
+  }
+
+  play(animation: MoxieAnimation): void {
+    this.stopGiggle(); // anything new takes over from a giggle at once
+    const preset = MOXIE_PRESETS[animation];
+    // The crown stays on (or off) whatever she does — except where she shows it herself (the Pro moment, the paywall).
+    if (!preset.ownsCrown) gsap.set(this.parts.crown, { opacity: this.options.crowned ? 1 : 0 });
+    const { parts } = this;
+    const tl = gsap.timeline();
+    this.current = animation;
+
+    if (this.options.reducedMotion) {
+      // Static key poses only: no loops, no bouncing.
+      tl.add(toNeutral(parts, SETTLE));
+      if (preset.reducedPose) {
+        tl.add(preset.reducedPose(parts));
+        if (preset.mode === "once") tl.add(toNeutral(parts, SETTLE * 1.5), `+=${REDUCED_HOLD}`);
+      }
+      tl.eventCallback("onComplete", () => {
+        if (preset.mode === "once") this.finishReaction(animation, false);
+      });
+    } else {
+      if (!preset.fromCurrentPose) tl.add(toNeutral(parts, SETTLE));
+      if (preset.intro) tl.add(preset.intro(parts));
+      tl.eventCallback("onComplete", () => {
+        if (preset.mode === "loop" && preset.cycle) this.runCycle(animation, preset.cycle);
+        else if (preset.mode === "once") this.finishReaction(animation, true);
+        else this.options.onComplete?.(animation);
+      });
+    }
+    this.start(tl);
+  }
+
+  /**
+   * Tickled: whatever's playing pauses where it is, she giggles (on layers
+   * no animation uses), then it picks up exactly where it stopped. Ignored
+   * while she's already giggling or paused. Returns whether she reacted.
+   */
+  tickle(): boolean {
+    if (this.giggle || this.paused) return false;
+    this.timeline?.pause();
+    const coverUp = this.current ? MOXIE_PRESETS[this.current].coversUpWhenTickled : false;
+    const giggle = tickleGiggle(this.parts, this.options.reducedMotion, coverUp);
+    giggle.eventCallback("onComplete", () => {
+      this.giggle = null;
+      if (!this.paused) this.timeline?.resume();
+    });
+    this.giggle = giggle;
+    return true;
+  }
+
+  /** Puts the Pro crown on, or takes it off. */
+  setCrowned(crowned: boolean): void {
+    this.options.crowned = crowned;
+    if (!this.current || !MOXIE_PRESETS[this.current].ownsCrown) gsap.set(this.parts.crown, { opacity: crowned ? 1 : 0 });
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (paused) {
+      this.timeline?.pause();
+      this.giggle?.pause();
+    } else if (this.giggle) {
+      this.giggle.resume(); // the animation underneath resumes when the giggle ends
+    } else {
+      this.timeline?.resume();
+    }
+  }
+
+  destroy(): void {
+    gsap.ticker.remove(this.syncArm);
+    this.stopGiggle();
+    this.timeline?.kill();
+    this.timeline = null;
+  }
+
+  private stopGiggle() {
+    if (!this.giggle) return;
+    this.giggle.kill();
+    this.giggle = null;
+    endTickle(this.parts);
+  }
+
+  /** Back to idle first, then notify — so a callback that plays something new wins. */
+  private finishReaction(animation: MoxieAnimation, resumeIdle: boolean) {
+    if (resumeIdle) this.play("idle");
+    else this.current = "idle";
+    this.options.onComplete?.(animation);
+  }
+
+  /** Loops are rebuilt every cycle so their randomised details never repeat exactly. */
+  private runCycle(animation: MoxieAnimation, cycle: MoxieTimelineFactory) {
+    const tl = cycle(this.parts);
+    tl.eventCallback("onComplete", () => this.runCycle(animation, cycle));
+    this.start(tl);
+    this.options.onCycle?.(animation);
+  }
+
+  private start(tl: gsap.core.Timeline) {
+    this.timeline?.kill();
+    this.timeline = tl;
+    if (this.paused || this.giggle) tl.pause();
+  }
+}

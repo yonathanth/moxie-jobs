@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ScreenSkeleton } from "@/components/skeletons";
-import { PromoBanner } from "@/components/PromoBanner";
 import { usePaywall } from "@/components/paywall";
 import { EXPERIENCE_BANDS, PLAN_NAME, type MeDto, type PreferencesDto, type TaxonomyDto } from "@ethio/shared";
 import { usePreferences, useRefreshMe, useSetAlertsPaused, useTaxonomy } from "@/components/miniapp/hooks";
@@ -42,17 +41,6 @@ export default function MiniAppHome() {
 
   return (
     <Screen className="animate-fade-up">
-      {!me.limits.premiumJobs && me.stats.lockedThisWeek > 0 && (
-        <PromoBanner
-          id={`locked-${me.stats.lockedThisWeek}`}
-          icon={Lock}
-          action="Unlock"
-          onAction={() => paywall.gate("premium_job")}
-          className="sticky top-0 z-20 -mx-4 -mt-5 mb-5"
-        >
-          {me.stats.lockedThisWeek} premium {me.stats.lockedThisWeek === 1 ? "job" : "jobs"} matched you this week
-        </PromoBanner>
-      )}
       <PageHeader
         eyebrow={`Selam${me.firstName ? `, ${me.firstName}` : ""}`}
         title="Profile"

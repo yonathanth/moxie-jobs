@@ -1,3 +1,7 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { JobCardSkeleton } from "./jobs/JobCard";
 import { Card, Skeleton } from "./ui";
 
 /**
@@ -15,8 +19,26 @@ function Header({ subtitle = true }: { subtitle?: boolean }) {
   );
 }
 
+type SkeletonVariant = "list" | "jobs" | "detail" | "form" | "cv" | "cvs" | "plans" | "profile";
+
+/** The placeholder the page at this path shows while it loads, so sign-in and page load look like one. */
+export function skeletonFor(path: string): SkeletonVariant {
+  if (/^\/app\/jobs\/[^/]+/.test(path)) return "detail";
+  if (path.startsWith("/app/jobs")) return "jobs";
+  if (path === "/app/cvs") return "cvs";
+  if (path.startsWith("/app/cvs/new") || path.startsWith("/app/onboarding") || path.startsWith("/app/preferences")) return "form";
+  if (path.startsWith("/app/cvs/")) return "cv";
+  if (path.startsWith("/app/plans")) return "plans";
+  if (path === "/app") return "profile";
+  return "list";
+}
+
+export function RouteSkeleton() {
+  return <ScreenSkeleton variant={skeletonFor(usePathname() ?? "")} />;
+}
+
 /** A screen of its own: header + body. */
-export function ScreenSkeleton({ variant = "list" }: { variant?: "list" | "jobs" | "detail" | "form" | "cv" | "plans" | "profile" }) {
+export function ScreenSkeleton({ variant = "list" }: { variant?: SkeletonVariant }) {
   return (
     <main aria-busy="true" aria-label="Loading" className="mx-auto min-h-dvh w-full max-w-lg px-4 pb-28 pt-5">
       {variant === "jobs" && <JobsSkeleton />}
@@ -25,6 +47,22 @@ export function ScreenSkeleton({ variant = "list" }: { variant?: "list" | "jobs"
       {variant === "cv" && <CvPageSkeleton />}
       {variant === "plans" && <PlansSkeleton />}
       {variant === "profile" && <ProfileSkeleton />}
+      {variant === "cvs" && (
+        <>
+          <Header />
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            {[0, 1].map((i) => (
+              <Card key={i} className="p-3.5">
+                <Skeleton className="size-10 rounded-xl" />
+                <Skeleton className="mt-3 h-4 w-3/4" />
+                <Skeleton className="mt-2 h-3 w-1/2" />
+              </Card>
+            ))}
+          </div>
+          <Skeleton className="mb-2 mt-5 h-4 w-20" />
+          <RowsSkeleton count={3} />
+        </>
+      )}
       {variant === "list" && (
         <>
           <Header />
@@ -55,25 +93,12 @@ export function RowsSkeleton({ count = 4 }: { count?: number }) {
   );
 }
 
-/** Job cards in the feed. */
-export function JobCardsSkeleton({ count = 4 }: { count?: number }) {
+/** Job cards in the feed (the same placeholder the feed shows while it loads). */
+export function JobCardsSkeleton({ count = 5 }: { count?: number }) {
   return (
     <div className="flex flex-col gap-3" aria-busy="true">
       {Array.from({ length: count }, (_, i) => (
-        <Card key={i} className="p-4">
-          <div className="flex items-start gap-3">
-            <Skeleton className="size-10 rounded-xl" />
-            <div className="min-w-0 flex-1">
-              <Skeleton className="h-4 w-4/5" />
-              <Skeleton className="mt-2 h-3.5 w-1/2" />
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <Skeleton className="h-6 w-20 rounded-full" />
-            <Skeleton className="h-6 w-24 rounded-full" />
-            <Skeleton className="h-6 w-16 rounded-full" />
-          </div>
-        </Card>
+        <JobCardSkeleton key={i} />
       ))}
     </div>
   );

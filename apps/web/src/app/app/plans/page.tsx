@@ -24,14 +24,8 @@ import { usePackCheckout } from "@/components/cv/hooks";
 import { useSession } from "@/components/miniapp/session";
 import { Badge, Button, Card, CenteredMessage, ErrorText, IconTile, PageHeader, Screen, Spinner } from "@/components/ui";
 import { formatBirr, formatDate, PERIOD_SHORT, PLAN_TAGLINE, planFeatures, savingVsMonthly } from "@/lib/plans";
-import { getWebApp, haptic } from "@/lib/telegram";
-
-/** Hosted checkout must open outside the Mini App webview. */
-function openCheckout(url: string) {
-  const wa = getWebApp();
-  if (wa) wa.openLink(url);
-  else window.open(url, "_blank", "noopener");
-}
+import { openCheckout } from "@/components/paywall";
+import { haptic } from "@/lib/telegram";
 
 export default function PlansPage() {
   const router = useRouter();

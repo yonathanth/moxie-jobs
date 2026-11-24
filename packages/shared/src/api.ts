@@ -138,6 +138,8 @@ export interface JobCardDto {
   firstSeenAt: string;
   summary: string | null;
   skills: string[];
+  /** Key requirements from the post (newer jobs; empty for older ones). */
+  requirements: string[];
   notStated: string[];
   apply: {
     /** Where the Apply button leads (employer link, their Telegram, or the original post). */

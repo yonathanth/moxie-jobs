@@ -1,22 +1,19 @@
 "use client";
 
 import { RowsSkeleton } from "@/components/skeletons";
-import { ChevronRight, FilePlus2, FileText, Gauge, Lock, Target, Upload, type LucideIcon } from "lucide-react";
+import { ArrowRight, ChevronRight, FilePlus2, FileText, Gauge, Lock, Target, Upload, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { PromoBanner } from "@/components/PromoBanner";
 import type { CvQuotaDto, CvSummaryDto } from "@ethio/shared";
 import { useCvList } from "@/components/cv/hooks";
 import { postedAgo } from "@/components/jobs/JobCard";
 import { Badge, Card, IconTile, PageHeader, Screen, type IconTone } from "@/components/ui";
-import { formatBirr } from "@/lib/plans";
 
 export default function CvsPage() {
   const list = useCvList();
   return (
     <Screen className="animate-fade-up">
-      {list.data && <QuotaBanner quota={list.data.quota} />}
       <PageHeader title="CVs" subtitle="Make a strong CV, then tailor it to each job in one tap." />
+      {list.data && <QuotaLine quota={list.data.quota} />}
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         <StartCard href="/app/cvs/new?mode=create" icon={FilePlus2} tone="accent" title="Create a CV" body="From a few answers" />
@@ -65,7 +62,12 @@ const TINT: Partial<Record<IconTone, string>> = {
 function StartCard({ href, icon: Icon, tone, title, body }: { href: string; icon: LucideIcon; tone: IconTone; title: string; body: string }) {
   return (
     <Link href={href} className="group">
-      <Card className={`h-full p-3.5 transition-transform group-active:scale-[0.99] ${TINT[tone] ?? ""}`}>
+      <Card
+        className={`relative h-full p-3.5 shadow-[0_12px_28px_-14px_rgba(15,17,21,0.35)] transition-[transform,box-shadow] group-active:scale-[0.98] group-active:shadow-[0_6px_16px_-10px_rgba(15,17,21,0.3)] ${TINT[tone] ?? ""}`}
+      >
+        <span className="absolute right-3 top-3 grid size-7 place-items-center rounded-full bg-white/80 text-text shadow-[0_2px_6px_-2px_rgba(15,17,21,0.2)]">
+          <ArrowRight className="size-4" />
+        </span>
         <IconTile tone={tone}>
           <Icon className="size-5" />
         </IconTile>
@@ -76,31 +78,25 @@ function StartCard({ href, icon: Icon, tone, title, body }: { href: string; icon
   );
 }
 
-/** What's left (plan allowance, pack credits) or the cheapest pack, as a slim banner at the top. */
-function QuotaBanner({ quota }: { quota: CvQuotaDto }) {
-  const router = useRouter();
-  if (quota.newLeft === null && quota.tailorLeft === null) return null; // unlimited: nothing to sell
+/** What's left this month or in pack credits, as a quiet line (nothing when unlimited or nothing left). */
+function QuotaLine({ quota }: { quota: CvQuotaDto }) {
+  if (quota.newLeft === null && quota.tailorLeft === null) return null;
   const n = (x: number | null) => (x === null ? "unlimited" : String(x));
   const included = quota.newLeft !== 0 || quota.tailorLeft !== 0;
   const credits = quota.credits.new + quota.credits.tailor > 0;
-  const cheapest = quota.packs[0];
   const text = included
     ? `This month: ${n(quota.newLeft)} new · ${n(quota.tailorLeft)} tailored left`
     : credits
       ? `Credits: ${quota.credits.new} new · ${quota.credits.tailor} tailored`
       : quota.freeTailoringAvailable
-        ? `First tailored CV free · packs from ${cheapest ? formatBirr(cheapest.price) : ""}`
-        : `CV packs from ${cheapest ? formatBirr(cheapest.price) : ""} · credits never expire`;
+        ? "Your first tailored CV is free"
+        : null;
+  if (!text) return null;
   return (
-    <PromoBanner
-      id={`cv-quota-${included ? "plan" : credits ? "credits" : "packs"}`}
-      icon={Gauge}
-      action={included || credits ? "Get more" : "See packs"}
-      onAction={() => router.push("/app/plans#packs")}
-      className="sticky top-0 z-20 -mx-4 -mt-5 mb-5"
-    >
+    <p className="mt-2 flex items-center gap-1.5 px-1 text-[13px] text-hint">
+      <Gauge className="size-3.5" />
       {text}
-    </PromoBanner>
+    </p>
   );
 }
 

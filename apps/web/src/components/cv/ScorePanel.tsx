@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { CvReviewTip } from "@ethio/shared";
 import { JOB_WEIGHT, QUALITY_WEIGHT, overallGain, scoreTone, type CvScore, type PolishTarget, type ScoreCheck } from "@/lib/cv-score";
 import { cx, Sheet } from "../ui";
+import { usePaywall } from "../paywall";
 import { EDITOR_SECTION_LIST, sectionStatus, type SectionKey } from "./editor/CvEditor";
 import type { CvContent } from "@ethio/shared";
 
@@ -112,6 +113,7 @@ export interface ScoreSheetProps {
 
 export function ScoreSheet(props: ScoreSheetProps) {
   const { score, canPolish, polishingKey } = props;
+  const paywall = usePaywall();
   const tone = scoreTone(score.total);
   const failing = score.checks.filter((c) => c.status !== "pass");
   const byGain = (a: ScoreCheck, b: ScoreCheck) => overallGain(score, b) - overallGain(score, a);
@@ -168,7 +170,7 @@ export function ScoreSheet(props: ScoreSheetProps) {
 
   const lockedItem = (check: ScoreCheck) => (
     <li key={check.id}>
-      <Link href="/app/plans" className="block w-full rounded-lg border border-accent-border bg-accent-soft/60 p-2.5 text-left">
+      <button type="button" onClick={() => paywall.gate("cv_ai")} className="block w-full rounded-lg border border-accent-border bg-accent-soft/60 p-2.5 text-left">
         <span className="flex items-baseline justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
             <Lock className="size-3.5 shrink-0 text-accent-strong" aria-hidden="true" />
@@ -183,7 +185,7 @@ export function ScoreSheet(props: ScoreSheetProps) {
         <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-accent-strong">
           <Crown className="size-3" /> Unlock with Pro or Career
         </span>
-      </Link>
+      </button>
     </li>
   );
 
@@ -366,8 +368,8 @@ export function ScoreSheet(props: ScoreSheetProps) {
         ) : (
           improve.length > 0 && (
             <div className="px-5 py-3">
-              <Link
-                href="/app/plans"
+              <button
+                type="button" onClick={() => paywall.gate("cv_ai")}
                 className="group block w-full rounded-xl border border-accent-border bg-linear-to-br from-accent-soft to-white p-3.5 text-left shadow-sm"
               >
                 <span className="flex items-start gap-3">
@@ -388,7 +390,7 @@ export function ScoreSheet(props: ScoreSheetProps) {
                     Unlock {fmtGain(improveGain)} <ArrowRight className="size-3.5" />
                   </span>
                 </span>
-              </Link>
+              </button>
             </div>
           )
         )}

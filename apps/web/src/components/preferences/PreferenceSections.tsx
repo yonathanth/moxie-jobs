@@ -16,19 +16,32 @@ interface Props {
   onChange: (patch: Partial<Preferences>) => void;
   taxonomy: TaxonomyDto;
   limits: PlanLimits;
+  /** Onboarding: just the picker, without the counts and the explainer. */
+  bare?: boolean;
 }
 
 /** The preference form, split in groups so onboarding can show one group per step. */
-export function PreferenceSections({ group, value, onChange, taxonomy, limits }: Props) {
+export function PreferenceSections({ group, value, onChange, taxonomy, limits, bare }: Props) {
   // No professions or categories: the degree is how this person gets matched.
   const byDegreeOnly = value.professionIds.length + value.functionIds.length === 0;
   switch (group) {
     case "work":
+      if (bare) {
+        return (
+          <div className="mt-5">
+            <ProfessionPicker
+              taxonomy={taxonomy}
+              professionIds={value.professionIds}
+              functionIds={value.functionIds}
+              limits={limits}
+              onChange={onChange}
+            />
+          </div>
+        );
+      }
       return (
         <Section
           title="Jobs you want"
-          aside={`${value.functionIds.length}/${limits.maxFunctions} categories · ${value.professionIds.length}/${limits.maxProfessions} roles`}
-          description="Pick the kinds of jobs you want. A whole category gets you every job in it; open one to pick specific roles."
         >
           <ProfessionPicker
             taxonomy={taxonomy}

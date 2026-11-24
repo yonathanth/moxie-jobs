@@ -35,6 +35,7 @@ Return ONE JSON object, nothing else:
     "apply": { "method": "url"|"email"|"telegram"|"phone"|"in_person"|"source", "url": string|null, "email": string|null, "telegram": string|null, "phone": string|null, "notes": string|null },
     "summary": string,
     "skills": string[],
+    "requirements": string[],
     "flags": string[]                // subset of: "unpaid", "fee_required", "overseas", "suspicious"
   }]
 }
@@ -56,6 +57,7 @@ Rules:
 - apply.method: how the employer wants applications. A link to the job board's own job page (ethiojobs, hahu, geezjobs, effoysira, afriwork...) or a "Details"/"Apply" button that opens the board's bot is NOT an employer url; use "source" when the board is the only way to apply. Email address → "email". Employer's Telegram account → "telegram". "Apply in person at …" → "in_person" with the address in notes.
 - summary: 1–3 short plain-English sentences in your own words: who is hiring, the role and the key requirements. No emojis, hashtags, links or long copied sentences. Translate Amharic.
 - skills: up to 8 concrete tools or skills named in the post (e.g. "Peachtree", "AutoCAD", "Excel").
+- requirements: up to 6 key requirements the post lists, each a short plain-English phrase (e.g. "BA in Accounting or related field", "3+ years in audit", "Valid grade 3 driving licence", "Fluent English and Amharic"). Translate Amharic. [] when the post lists none.
 - gender: "female"/"male" only when the post restricts the job to that gender ("Applicants Needed: Female", "female only", "ጾታ፡ ሴት"). "Women are encouraged to apply", "female preferred" or equal-opportunity statements → "any".
 - flags: "unpaid" for unpaid roles, "fee_required" if any payment is asked, "overseas" for jobs abroad.`;
 

@@ -125,31 +125,40 @@ describe("buildCard", () => {
     expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 
-  it("local dev (http): Similar jobs and CV fall back to callbacks; View job when there is no exact apply link", () => {
+  it("local dev (http): See details and More jobs fall back to callbacks", () => {
     const { buttons } = buildCard(job(), opts);
     expect(buttons).toEqual([
       [
-        { text: "View job", url: "https://t.me/ethiojobs_netbot?startapp=job_id_1" },
-        { text: "Similar jobs", callback_data: "mj" },
+        { text: "See details", callback_data: "ap:d-1" },
+        { text: "More jobs", callback_data: "mj" },
       ],
-      [{ text: "Get a CV tailored to this job", callback_data: "cv:d-1" }],
     ]);
   });
 
-  it("says Apply only with an exact application link", () => {
-    const { buttons } = buildCard(job({ applyMethod: "url", applyUrl: "https://careers.example.com/1" }), opts);
-    expect(buttons[0]![0]).toEqual({ text: "Apply", url: "https://careers.example.com/1" });
-  });
-
-  it("on https: Mini App buttons and the tracked apply redirect", () => {
+  it("on https: two Mini App buttons, the job page and the For you feed", () => {
     const { buttons } = buildCard(job(), { ...opts, webAppUrl: "https://jobs.gomoxie.app", publicApiUrl: "https://api.jobs.gomoxie.app" });
     expect(buttons).toEqual([
       [
-        { text: "View job", url: "https://api.jobs.gomoxie.app/r/d-1" },
-        { text: "Similar jobs", web_app: { url: "https://jobs.gomoxie.app/app/jobs?scope=all&similar=job-1" } },
+        { text: "See details", web_app: { url: "https://jobs.gomoxie.app/app/jobs/job-1" } },
+        { text: "More jobs", web_app: { url: "https://jobs.gomoxie.app/app/jobs?scope=for_you" } },
       ],
-      [{ text: "Get a CV tailored to this job", web_app: { url: "https://jobs.gomoxie.app/app/cvs/new?mode=tailor&jobId=job-1" } }],
     ]);
+  });
+
+  it("always says how to apply, linking the application page or the original post", () => {
+    expect(buildCard(job(), opts).text).toContain(
+      '<b>How to apply:</b> Follow the instructions in the <a href="https://t.me/ethiojobs_netbot?startapp=job_id_1">original post</a>.',
+    );
+    expect(buildCard(job({ applyMethod: "url", applyUrl: "https://careers.example.com/1" }), opts).text).toContain(
+      '<b>How to apply:</b> <a href="https://careers.example.com/1">Apply online</a>',
+    );
+    expect(buildCard(job(), { ...opts, publicApiUrl: "https://api.jobs.gomoxie.app" }).text).toContain('href="https://api.jobs.gomoxie.app/r/d-1"');
+    expect(buildCard(job({ sourceUrl: "telegram:ethiojobs/12" }), opts).text).toContain("Follow the instructions in the original post on Ethiojobs.");
+  });
+
+  it("lists requirements", () => {
+    const { text } = buildCard(job({ requirements: ["BA in Accounting", "5+ years <audit>"] }), opts);
+    expect(text).toContain("<b>Requirements:</b>\n• BA in Accounting\n• 5+ years &lt;audit&gt;");
   });
 
   it("labels the employer type and says what the post didn't state", () => {
@@ -160,7 +169,7 @@ describe("buildCard", () => {
   });
 
   it("shows how to apply for email, phone and in person", () => {
-    expect(buildCard(job({ applyMethod: "email", applyEmail: "hr@x.com" }), opts).text).toContain("<b>How to apply:</b> Send your CV to hr@x.com");
+    expect(buildCard(job({ applyMethod: "email", applyEmail: "hr@x.com" }), opts).text).toContain("<b>How to apply:</b> Send your CV to hr@x.com. Details in the <a href=\"https://t.me/ethiojobs_netbot?startapp=job_id_1\">original post</a>.");
     expect(buildCard(job({ applyMethod: "phone", applyPhone: "+251911000000" }), opts).text).toContain("<b>How to apply:</b> Call +251911000000");
     expect(buildCard(job({ applyMethod: "in_person", applyNotes: "Bole, Getu Commercial 4th floor" }), opts).text).toContain(
       "<b>How to apply:</b> In person: Bole, Getu Commercial 4th floor",

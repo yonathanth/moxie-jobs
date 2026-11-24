@@ -10,7 +10,8 @@ import { PreferenceSections } from "@/components/preferences/PreferenceSections"
 import { fromDto, hasTarget, overLimits, salaryInvalid, trimToLimits } from "@/components/preferences/state";
 import { Button, Card, CenteredMessage, ErrorText, PageHeader, Screen, StickyFooter } from "@/components/ui";
 import { ChevronRight, Crown } from "lucide-react";
-import Link from "next/link";
+import type { PlanLimits } from "@ethio/shared";
+import { usePaywall, type PaywallReason } from "@/components/paywall";
 import { ApiError } from "@/lib/api";
 import { haptic } from "@/lib/telegram";
 
@@ -51,6 +52,7 @@ function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: Taxonom
   const [justSaved, setJustSaved] = useState(false);
   const dirty = JSON.stringify(prefs) !== JSON.stringify(initial);
   const over = overLimits(prefs, me.limits);
+  const paywall = usePaywall();
 
   const onChange = (patch: Partial<Preferences>) => {
     setJustSaved(false);
@@ -70,7 +72,7 @@ function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: Taxonom
     <Screen>
       <PageHeader title="Job preferences" subtitle="We match every new job against these." />
       {me.effectivePlan === "free" && (
-        <Link href="/app/plans" className="mt-4 block">
+        <button type="button" onClick={() => paywall.gate("daily_cap")} className="mt-4 block w-full text-left">
           <Card className="flex items-center gap-3 border-accent-border bg-accent-soft/50 py-3">
             <Crown className="size-4 shrink-0 text-accent-strong" />
             <p className="flex-1 text-[13px] text-accent-strong">
@@ -79,7 +81,7 @@ function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: Taxonom
             </p>
             <ChevronRight className="size-4 text-accent-strong" />
           </Card>
-        </Link>
+        </button>
       )}
 
       {over.length > 0 && (
@@ -92,9 +94,9 @@ function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: Taxonom
             <Button variant="secondary" className="h-10 w-auto flex-1 text-sm" onClick={() => onChange(trimToLimits(prefs, me.limits))}>
               Keep the active ones
             </Button>
-            <Link href="/app/plans" className="inline-flex h-10 flex-1 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-white">
-              See plans
-            </Link>
+            <Button variant="accent" className="h-10 w-auto flex-1 text-sm" onClick={() => paywall.gate(overReason(prefs, me.limits))}>
+              Upgrade
+            </Button>
           </div>
         </Card>
       )}
@@ -121,4 +123,12 @@ function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: Taxonom
       </StickyFooter>
     </Screen>
   );
+}
+
+/** The paywall that lifts the first list over this plan's limit. */
+function overReason(p: Preferences, l: PlanLimits): PaywallReason {
+  if (p.professionIds.length > l.maxProfessions) return "professions";
+  if (p.functionIds.length > l.maxFunctions) return "categories";
+  if (p.fieldOfStudyIds.length > l.maxFieldsOfStudy) return "fields";
+  return "locations";
 }

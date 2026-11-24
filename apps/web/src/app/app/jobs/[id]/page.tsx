@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Briefcase, Clock, ExternalLink, FileText, GraduationCap, Lock, MapPin, User, Wallet } from "lucide-react";
+import { ArrowRight, Briefcase, Check, Clock, ExternalLink, FileText, GraduationCap, Lock, MapPin, User, Wallet } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { ScreenSkeleton } from "@/components/skeletons";
@@ -10,7 +10,6 @@ import { SaveButton, ShareButton } from "@/components/jobs/JobActions";
 import { daysLeft, postedAgo } from "@/components/jobs/JobCard";
 import { useBackButton, useJob } from "@/components/miniapp/hooks";
 import { usePaywall } from "@/components/paywall";
-import { PromoBanner } from "@/components/PromoBanner";
 import { Badge, Button, Card, CenteredMessage, IconTile, StickyFooter } from "@/components/ui";
 import { formatDate } from "@/lib/plans";
 import { haptic, openExternal } from "@/lib/telegram";
@@ -62,20 +61,27 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
 
   const days = daysLeft(job.deadline);
   const closed = days !== null && days < 0;
+  const sourceUrl = job.sourceUrl ?? job.apply?.url ?? null;
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 pb-36 pt-5 animate-fade-up">
       {!job.locked && !closed && (
-        <PromoBanner
-          id="tailor-cv"
-          dismissable={false}
-          icon={FileText}
-          action="Tailor"
-          onAction={tailor}
-          className={clsx("sticky top-0 z-20 -mx-4 -mt-5 mb-4", cvHighlight && "ring-2 ring-inset ring-accent/40")}
-        >
-          Get a CV tailored to this job
-        </PromoBanner>
+        <div className="sticky top-0 z-20 -mx-4 -mt-5 mb-4 bg-bg/90 px-4 pb-3 pt-3 backdrop-blur">
+          <button
+            type="button"
+            onClick={tailor}
+            className={clsx(
+              "flex w-full items-center gap-2.5 rounded-full bg-[linear-gradient(90deg,#ff7a1a_0%,#ff4f3a_100%)] py-2.5 pl-5 pr-2.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_-10px_rgba(255,79,58,0.7)] transition-transform active:scale-[0.98]",
+              cvHighlight && "ring-4 ring-accent/25",
+            )}
+          >
+            <FileText className="size-4 shrink-0" />
+            <span className="flex-1 text-left">Get a custom-made CV for this job</span>
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/25">
+              <ArrowRight className="size-5" strokeWidth={2.5} />
+            </span>
+          </button>
+        </div>
       )}
       <div className="flex flex-wrap items-center gap-2 px-1">
         {job.employerLabel && <Badge tone={job.locked ? "accent" : "neutral"}>{job.employerLabel}</Badge>}
@@ -148,44 +154,32 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
             </Card>
           </section>
 
-          {job.apply?.how && (
-            <section className="mt-5">
-              <h2 className="mb-2 px-1 text-[15px] font-semibold">How to apply</h2>
-              <Card>
-                <p className="text-[15px]">{job.apply.how}</p>
-              </Card>
-            </section>
-          )}
+          <Requirements job={job} />
+
+          <section className="mt-5">
+            <h2 className="mb-2 px-1 text-[15px] font-semibold">How to apply</h2>
+            <Card>
+              <HowToApply job={job} />
+            </Card>
+          </section>
 
           {job.sourceTitle && <p className="mt-5 px-1 text-center text-xs text-hint">Found on {job.sourceTitle}</p>}
         </>
       )}
 
-      {!job.locked && (
+      {!job.locked && sourceUrl && (
         <StickyFooter>
-          {closed ? (
-            <p className="py-2 text-center text-sm text-hint">This job has closed.</p>
-          ) : (
-            <div className="flex gap-2">
-              <Button variant="secondary" className="w-auto flex-1" onClick={tailor}>
-                <FileText className="size-4" />
-                Tailored CV
-              </Button>
-              {job.apply?.url && (
-                // "Apply" = exact application link; "View job" = the original post.
-                <Button
-                  className="w-auto flex-[2]"
-                  onClick={() => {
-                    haptic.select();
-                    openExternal(job.apply!.url!);
-                  }}
-                >
-                  {job.apply.label}
-                  <ExternalLink className="size-4" />
-                </Button>
-              )}
-            </div>
-          )}
+          {closed && <p className="text-center text-[13px] text-hint">This job has closed.</p>}
+          <Button
+            variant={closed ? "secondary" : "primary"}
+            onClick={() => {
+              haptic.select();
+              openExternal(sourceUrl);
+            }}
+          >
+            {job.sourceTitle ? `View on ${job.sourceTitle}` : "View original post"}
+            <ExternalLink className="size-4" />
+          </Button>
         </StickyFooter>
       )}
     </main>
@@ -214,5 +208,60 @@ function Fact({
         {value ?? "Not stated"}
       </dd>
     </div>
+  );
+}
+
+/** The post's requirements; older jobs (extracted before requirements were kept) fall back to the facts we have. */
+function Requirements({ job }: { job: JobCardDto }) {
+  const items = job.requirements.length
+    ? job.requirements
+    : [
+        job.education,
+        job.experience ? `${job.experience} of experience` : null,
+        job.skills.length ? `Skills: ${job.skills.join(", ")}` : null,
+      ].filter((x): x is string => !!x);
+  if (items.length === 0) return null;
+  return (
+    <section className="mt-5">
+      <h2 className="mb-2 px-1 text-[15px] font-semibold">Requirements</h2>
+      <Card>
+        <ul className="flex flex-col gap-2">
+          {items.map((r) => (
+            <li key={r} className="flex items-start gap-2.5 text-[15px] leading-snug">
+              <span className="mt-0.5 grid size-4.5 shrink-0 place-items-center rounded-full bg-ink text-white">
+                <Check className="size-2.5" strokeWidth={3.5} />
+              </span>
+              <span>{r}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </section>
+  );
+}
+
+/** Instructions (email, phone, in person), plus the employer's application link when there is one. */
+function HowToApply({ job }: { job: JobCardDto }) {
+  const exact = job.apply?.label === "Apply" ? job.apply.url : null;
+  const how =
+    job.apply?.how ??
+    (exact ? "Apply online on the employer's application page." : `Follow the instructions in the original post${job.sourceTitle ? ` on ${job.sourceTitle}` : ""}.`);
+  return (
+    <>
+      <p className="text-[15px] leading-relaxed">{how}</p>
+      {exact && (
+        <button
+          type="button"
+          onClick={() => {
+            haptic.select();
+            openExternal(exact);
+          }}
+          className="mt-2 inline-flex items-center gap-1 text-[14px] font-semibold text-accent-strong"
+        >
+          Open application page
+          <ExternalLink className="size-3.5" />
+        </button>
+      )}
+    </>
   );
 }

@@ -51,6 +51,11 @@ export const envSchema = z
       .optional()
       .transform((v) => (v ? v.replace(/\\n/g, "\n").trim() : undefined)),
     SANTIMPAY_BASE_URL: z.url().default("https://services.santimpay.com/api/v1/gateway"),
+    /** Overrides SantimPay's callback-signing public key (PEM, built in from SDK 2.0). Same \n rule as above. */
+    SANTIMPAY_PUBLIC_KEY: z
+      .string()
+      .optional()
+      .transform((v) => (v ? v.replace(/\\n/g, "\n").trim() : undefined)),
 
     /** GoMoxie CV engine (partner API). Unset = CV features answer 503. */
     GOMOXIE_API_URL: z.url().optional(),

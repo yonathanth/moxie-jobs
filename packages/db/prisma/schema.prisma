@@ -240,6 +240,8 @@ model Job {
   deadlineRaw     String?
   summary         String
   skills          String[]  @default([])
+  /// Key requirements from the post, short plain-English phrases (newer jobs only).
+  requirements    String[]  @default([])
   applyMethod     String // url | email | telegram | phone | in_person | source
   applyUrl        String?
   applyEmail      String?

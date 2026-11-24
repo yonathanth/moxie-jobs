@@ -19,9 +19,13 @@ export function nextPlanPeriod(
   return { start, end: new Date(start.getTime() + PERIOD_DAYS[bought.period] * DAY_MS) };
 }
 
-/** Amount check for a verified payment (SantimPay reports amounts as strings). */
+/**
+ * Amount check for a verified payment (SantimPay reports amounts as strings).
+ * At least the price passes: with fullParams the status API may report a
+ * totalAmount that includes the customer's fee. Less than the price fails.
+ */
 export function amountMatches(expected: number, reported: string | number | undefined): boolean {
   if (reported === undefined || reported === null || reported === "") return true; // status API may omit it
   const n = typeof reported === "number" ? reported : Number(String(reported).replace(/[^\d.]/g, ""));
-  return Number.isFinite(n) && Math.abs(n - expected) < 0.01;
+  return Number.isFinite(n) && n > expected - 0.01;
 }

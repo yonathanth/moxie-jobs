@@ -110,7 +110,7 @@ export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
       )}
     >
       {job.locked ? (
-        <button type="button" className="block w-full text-left transition-colors active:bg-accent-soft/60" onClick={() => paywall.gate("premium_job")}>
+        <button type="button" className="block w-full text-left transition-colors active:bg-accent-soft/60" onClick={() => paywall.gate("premium_job", { then: href })}>
           {top}
         </button>
       ) : (
@@ -124,7 +124,7 @@ export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
         {job.locked ? (
           <button
             type="button"
-            onClick={() => paywall.gate("premium_job")}
+            onClick={() => paywall.gate("premium_job", { then: href })}
             className="ml-auto inline-flex h-9 items-center gap-0.5 rounded-lg px-2.5 text-[13px] font-semibold text-accent-strong hover:bg-accent-soft"
           >
             Unlock with Pro

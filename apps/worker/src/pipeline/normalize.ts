@@ -86,6 +86,7 @@ export interface JobDraft {
   deadlineRaw: string | null;
   summary: string;
   skills: string[];
+  requirements: string[];
   applyMethod: string;
   applyUrl: string | null;
   applyEmail: string | null;
@@ -227,6 +228,7 @@ export function normalizeJob(
     deadlineRaw: j.deadline?.raw?.slice(0, 200) ?? null,
     summary: summary.slice(0, 700),
     skills: [...new Set(j.skills.map((s) => s.trim()).filter(Boolean))].slice(0, 8),
+    requirements: [...new Set(j.requirements.map((s) => s.trim().slice(0, 160)).filter(Boolean))].slice(0, 6),
     applyMethod,
     applyUrl,
     applyEmail,

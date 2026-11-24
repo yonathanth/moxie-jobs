@@ -1,17 +1,19 @@
 "use client";
 
 import clsx from "clsx";
-import { Briefcase, Check, CheckCircle2, ChevronRight, Compass, FilePlus2, FileText, Loader2, type LucideIcon, RefreshCw, Upload, UserRound, X } from "lucide-react";
+import { Briefcase, Check, CheckCircle2, ChevronRight, ClipboardPaste, Compass, FilePlus2, FileText, Loader2, type LucideIcon, RefreshCw, Upload, UserRound, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ScreenSkeleton } from "@/components/skeletons";
 import type { CvGenerateRequest, CvQuotaDto, CvSummaryDto, JobCardDto } from "@ethio/shared";
-import { contactLine, ContactForm, Field } from "@/components/cv/ContactForm";
+import { ContactForm, Field } from "@/components/cv/ContactForm";
 import { PackCards } from "@/components/cv/PackCards";
 import { useCvList, useGenerateCv, useImportCv, usePackCheckout } from "@/components/cv/hooks";
 import { useBackButton, useJob, usePayment, usePricing } from "@/components/miniapp/hooks";
 import { useSession } from "@/components/miniapp/session";
+import { usePaywall } from "@/components/paywall";
 import { Button, Card, CenteredMessage, ErrorText, IconTile, PageHeader, Screen, Sheet, Skeleton, StickyFooter, type IconTone } from "@/components/ui";
+import { MoxieLoader } from "@/components/moxie";
 import { ApiError } from "@/lib/api";
 import { formatBirr } from "@/lib/plans";
 import { getWebApp, haptic } from "@/lib/telegram";
@@ -55,7 +57,7 @@ function NewCv() {
       <ScreenSkeleton variant="form" />
     );
   }
-  if (generate.isPending) return <Working phase={phase ?? (mode === "tailor" ? "tailor" : "base")} jobTitle={job.data?.title} />;
+  if (generate.isPending) return <Working phase={phase ?? (mode === "tailor" ? "tailor" : "base")} flow={mode} jobTitle={job.data?.title} />;
 
   const open = (id: string) => router.replace(`/app/cvs/${id}`);
 
@@ -257,18 +259,45 @@ function SourceForm({
   const [step, setStep] = useState<"details" | "content">(me.cvContact ? "content" : "details");
   const [firstTime] = useState(!me.cvContact);
   const [savedNote, setSavedNote] = useState(false);
-  const [editingContact, setEditingContact] = useState(false);
+  // Improve: upload a file (goes straight on to improving it) or paste the text.
+  const [source, setSource] = useState<"upload" | "paste" | null>(null);
   const [text, setText] = useState("");
   const [focus, setFocus] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
 
   useEffect(() => setMode(initialMode), [initialMode]);
 
+  const submit = (flow: "create" | "improve", sourceText: string) => {
+    const contact = me.cvContact;
+    if (!contact) return;
+    onSubmit({
+      flow,
+      sourceText,
+      name: contact.name,
+      email: contact.email ?? undefined,
+      phone: contact.phone ?? undefined,
+      location: contact.location ?? undefined,
+      focus: focus.trim() || undefined,
+    });
+  };
+
   const pick = (file: File | undefined) => {
     if (!file) return;
     setFileName(file.name);
-    importCv.mutate(file, { onSuccess: (r) => setText(r.text), onError: () => haptic.error() });
+    importCv.mutate(file, {
+      onSuccess: (r) => {
+        if (r.text.trim().length >= 40) submit("improve", r.text);
+        else {
+          // Too little text came out (e.g. a blurry photo): let them paste it instead.
+          haptic.error();
+          setText(r.text);
+          setSource("paste");
+        }
+      },
+      onError: () => haptic.error(),
+    });
   };
+  const showText = mode === "create" || source === "paste";
 
   const header = fromJob ? (
     <PageHeader eyebrow="Tailor your CV" title={fromJob.title} subtitle={step === "details" ? "First, your CV. It's free. Then we tailor it to this job." : undefined} />
@@ -327,100 +356,118 @@ function SourceForm({
             <X className="size-3.5" />
           </button>
         </div>
-      ) : (
-        contact && (
-          <button
-            type="button"
-            onClick={() => setEditingContact(true)}
-            className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-separator bg-surface px-3.5 py-3 text-left transition-colors active:bg-neutral-50"
-          >
-            <IconTile tone="neutral" size="sm">
-              <UserRound />
-            </IconTile>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[12px] text-hint">On your CV</span>
-              <span className="block truncate text-[14px] font-medium">{contactLine(contact)}</span>
-            </span>
-            <span className="shrink-0 text-[13px] font-semibold text-accent-strong">Edit</span>
-          </button>
-        )
-      )}
+      ) : null}
 
       {allowSwitch && (
         <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl border border-separator bg-surface p-1">
           {(["create", "improve"] as const).map((m) => (
-            <button key={m} type="button" onClick={() => setMode(m)} className={clsx("rounded-lg py-2 text-sm font-semibold", mode === m ? "bg-ink text-white" : "text-hint")}>
+            <button key={m} type="button" onClick={() => {
+                setMode(m);
+                setSource(null);
+              }} className={clsx("rounded-lg py-2 text-sm font-semibold", mode === m ? "bg-ink text-white" : "text-hint")}>
               {m === "create" ? "Write it" : "Upload my CV"}
             </button>
           ))}
         </div>
       )}
 
-      {mode === "improve" && (
-        <Card className="mt-4">
-          <input ref={fileInput} type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
-          <button type="button" onClick={() => fileInput.current?.click()} className="flex w-full items-center gap-3 text-left">
-            <IconTile tone="sky">{importCv.isPending ? <Loader2 className="size-5 animate-spin" /> : <Upload className="size-5" />}</IconTile>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[15px] font-semibold">{fileName ?? "Upload your CV"}</span>
-              <span className="block text-[12px] text-hint">{importCv.isPending ? "Reading it…" : "PDF, Word (.docx) or a clear photo"}</span>
-            </span>
-          </button>
+      {mode === "improve" && !showText && (
+        <>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".pdf,.docx,.png,.jpg,.jpeg"
+            className="hidden"
+            onChange={(e) => {
+              pick(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <p className="mb-2 mt-5 px-1 text-[15px] font-semibold">How do you want to add your CV?</p>
+          <div className="flex flex-col gap-3">
+            <ChoiceCard
+              icon={Upload}
+              tone="sky"
+              title="Upload a file"
+              body="PDF, Word (.docx) or a clear photo. We improve it right away."
+              onClick={() => {
+                haptic.select();
+                setSource("upload");
+                fileInput.current?.click();
+              }}
+            />
+            <ChoiceCard
+              icon={ClipboardPaste}
+              tone="violet"
+              title="Paste the text"
+              body="Copy your CV's text and paste it in."
+              onClick={() => {
+                haptic.select();
+                setSource("paste");
+              }}
+            />
+          </div>
           {importCv.error && (
-            <div className="mt-2">
+            <div className="mt-3">
               <ErrorText>{importCv.error.message}</ErrorText>
             </div>
           )}
-        </Card>
+          <div className="mt-4">
+            <PriceNote flow={mode} quota={quota} freeBase={!!fromJob} />
+          </div>
+          {error && (
+            <div className="mt-2">
+              <ErrorText>{error}</ErrorText>
+            </div>
+          )}
+        </>
       )}
 
-      <section className="mt-4">
-        <h2 className="mb-2 px-1 text-[15px] font-semibold">{mode === "improve" ? "Your CV's text" : "About your experience"}</h2>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={mode === "improve" ? 10 : 9}
-          placeholder={mode === "improve" ? "Upload your CV above, or paste its text here." : PROMPT}
-          className="w-full rounded-2xl border border-separator bg-surface p-3.5 text-[15px] leading-relaxed outline-none placeholder:text-hint-light focus:border-ink"
-        />
-        <p className="mt-1 px-1 text-[12px] text-hint">Plain words are fine, in English or Amharic. We only use what you tell us. Nothing is made up.</p>
-      </section>
+      {showText && (
+        <section className="mt-4">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <h2 className="text-[15px] font-semibold">{mode === "improve" ? "Your CV's text" : "About your experience"}</h2>
+            {mode === "improve" && (
+              <button type="button" onClick={() => setSource(null)} className="text-[13px] font-semibold text-accent-strong">
+                Upload instead
+              </button>
+            )}
+          </div>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={mode === "improve" ? 10 : 9}
+            placeholder={mode === "improve" ? "Paste your CV's text here." : PROMPT}
+            className="w-full rounded-2xl border border-separator bg-surface p-3.5 text-[15px] leading-relaxed outline-none placeholder:text-hint-light focus:border-ink"
+          />
+          <p className="mt-1 px-1 text-[12px] text-hint">Plain words are fine, in English or Amharic. We only use what you tell us. Nothing is made up.</p>
+        </section>
+      )}
 
-      {mode === "improve" && (
+      {mode === "improve" && showText && (
         <div className="mt-3">
           <Field label="Anything to focus on? (optional)" value={focus} onChange={setFocus} placeholder="e.g. aim for a senior role, highlight leadership" />
         </div>
       )}
 
+      {importCv.isPending && (
+        <MoxieLoader
+          animation="read"
+          crowned={me.plan !== "free"}
+          messages={[fileName ? `Reading ${fileName}…` : "Reading your CV…", "Finding your jobs and dates…", "Picking out your skills…"]}
+        />
+      )}
+
+      {showText && (
       <StickyFooter>
         {error && <ErrorText>{error}</ErrorText>}
         <PriceNote flow={mode} quota={quota} freeBase={!!fromJob} />
-        <Button
-          variant="accent"
-          disabled={!ready || importCv.isPending}
-          onClick={() =>
-            contact &&
-            onSubmit({
-              flow: mode,
-              sourceText: text,
-              name: contact.name,
-              email: contact.email ?? undefined,
-              phone: contact.phone ?? undefined,
-              location: contact.location ?? undefined,
-              focus: focus.trim() || undefined,
-            })
-          }
-        >
+        <Button variant="accent" disabled={!ready || importCv.isPending} onClick={() => submit(mode, text)}>
           {fromJob ? "Make my CV and tailor it" : mode === "improve" ? "Improve my CV" : "Create my CV"}
         </Button>
       </StickyFooter>
-
-      {editingContact && (
-        <Sheet title="Your details" onClose={() => setEditingContact(false)}>
-          <p className="mb-4 text-[13px] text-hint">Printed at the top of every CV.</p>
-          <ContactForm submitLabel="Save" onSaved={() => setEditingContact(false)} />
-        </Sheet>
       )}
+
     </Screen>
   );
 }
@@ -570,17 +617,42 @@ function NextStep({ icon: Icon, tone, title, body, onClick }: { icon: LucideIcon
   );
 }
 
-function Working({ phase, jobTitle }: { phase: "base" | "tailor"; jobTitle?: string }) {
+/** Moxie at work while the AI writes, improves or tailors the CV (as on gomoxie.app). */
+function Working({ phase, flow, jobTitle }: { phase: "base" | "tailor"; flow: Mode; jobTitle?: string }) {
+  const { me } = useSession();
+  const crowned = me.plan !== "free";
+  if (phase === "tailor") {
+    return (
+      <MoxieLoader
+        animation="tailor"
+        crowned={crowned}
+        messages={[jobTitle ? `Tailoring your CV to ${jobTitle}…` : "Reading the job post…", "Matching your experience to it…", "Cutting what doesn't fit…", "Keeping it all true to you…"]}
+      />
+    );
+  }
+  if (flow === "improve") {
+    return <MoxieLoader animation="polish" crowned={crowned} messages={["Improving your CV…", "Tightening every bullet…", "Bringing your results forward…", "Cutting the filler…"]} />;
+  }
+  return <MoxieLoader animation="write" crowned={crowned} messages={["Writing your CV…", "Choosing strong action verbs…", "Turning duties into results…", "Laying it out cleanly…"]} />;
+}
+
+/** A big tappable option with an icon and a chevron. */
+function ChoiceCard({ icon: Icon, tone, title, body, onClick }: { icon: LucideIcon; tone: IconTone; title: string; body: string; onClick: () => void }) {
   return (
-    <CenteredMessage
-      icon={
-        <IconTile>
-          <Loader2 className="size-5 animate-spin" />
-        </IconTile>
-      }
-      title={phase === "tailor" ? "Tailoring your CV…" : "Writing your CV…"}
-      body={phase === "tailor" ? `Matching it to ${jobTitle ?? "the job"}. This takes about 15 seconds.` : "Turning your answers into a professional CV. This takes about 15 seconds."}
-    />
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-2xl border border-separator bg-surface p-4 text-left shadow-[0_10px_28px_-16px_rgba(15,17,21,0.3)] transition-transform active:scale-[0.99]"
+    >
+      <IconTile tone={tone}>
+        <Icon className="size-5" />
+      </IconTile>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold">{title}</span>
+        <span className="block text-[12px] text-hint">{body}</span>
+      </span>
+      <ChevronRight className="size-5 shrink-0 text-hint" />
+    </button>
   );
 }
 
@@ -592,7 +664,7 @@ function openCheckout(url: string) {
 
 /** Out of CVs: pick a pack. After paying, the CV they were making is made straight away. */
 function PackPrompt({ message, onClose, onCheckout }: { message: string; onClose: () => void; onCheckout: (p: { id: string; url: string }) => void }) {
-  const router = useRouter();
+  const paywall = usePaywall();
   const pricing = usePricing();
   const checkout = usePackCheckout();
   return (
@@ -620,7 +692,14 @@ function PackPrompt({ message, onClose, onCheckout }: { message: string; onClose
           <ErrorText>{checkout.error.message}</ErrorText>
         </div>
       )}
-      <button type="button" onClick={() => router.push("/app/plans")} className="mt-4 w-full text-center text-[13px] font-semibold text-accent-strong">
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          paywall.gate("cvs");
+        }}
+        className="mt-4 w-full text-center text-[13px] font-semibold text-accent-strong"
+      >
         Or get Pro: new and tailored CVs every month
       </button>
     </Sheet>

@@ -99,7 +99,7 @@ export function mergeData(
   for (const key of FILLABLE) {
     if (existing[key] === null && draft[key] !== null) data[key] = draft[key];
   }
-  for (const key of ["fieldOfStudyIds", "locationIds", "skills"] as const) {
+  for (const key of ["fieldOfStudyIds", "locationIds", "skills", "requirements"] as const) {
     if (existing[key].length === 0 && draft[key].length > 0) data[key] = draft[key];
   }
   if (existing.genderReq === "any" && draft.genderReq !== "any") data.genderReq = draft.genderReq;

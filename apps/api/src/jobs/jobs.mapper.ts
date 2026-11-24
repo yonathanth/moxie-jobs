@@ -55,6 +55,7 @@ export function toCard(job: Job, ctx: CardContext): JobCardDto {
       gender: null,
       summary: null,
       skills: [],
+      requirements: [],
       notStated: [],
       apply: null,
       sourceTitle: null,
@@ -73,6 +74,7 @@ export function toCard(job: Job, ctx: CardContext): JobCardDto {
     gender: genderText(job.genderReq),
     summary: job.summary,
     skills: job.skills,
+    requirements: job.requirements,
     notStated: notStated(job),
     apply: {
       url: /^https?:\/\//i.test(target.url) ? target.url : null,

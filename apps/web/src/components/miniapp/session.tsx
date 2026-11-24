@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { ScreenSkeleton } from "../skeletons";
+import { RouteSkeleton } from "../skeletons";
 import type { MeDto } from "@ethio/shared";
 import { api, ApiError } from "@/lib/api";
 import { BOT_URL, DEV_AUTH, DEV_TELEGRAM_ID } from "@/lib/config";
@@ -113,7 +113,7 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
   switch (state.status) {
     case "loading":
       return (
-        <ScreenSkeleton variant="jobs" />
+        <RouteSkeleton />
       );
     case "outside-telegram":
       return (

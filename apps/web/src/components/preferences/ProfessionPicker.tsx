@@ -2,7 +2,6 @@
 
 import clsx from "clsx";
 import { Check, ChevronDown, Loader2, Plus } from "lucide-react";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { PlanLimits, ProfessionDto, TaxonomyDto } from "@ethio/shared";
 import { search } from "@/lib/search";
@@ -131,9 +130,9 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
           {upgradeAllowsMore && (
             <>
               , or{" "}
-              <Link href="/app/plans" className="font-semibold text-accent-strong">
+              <button type="button" onClick={() => paywall.gate("professions")} className="font-semibold text-accent-strong">
                 upgrade for more
-              </Link>
+              </button>
             </>
           )}
           .
@@ -186,7 +185,6 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
         </ul>
       ) : (
         <div>
-          <p className="mb-1 text-xs font-medium text-hint">Job categories · tap to get every job in one</p>
           <ul className="flex flex-col gap-1.5">
             {taxonomy.functions.map((f) => (
               <CategoryRow

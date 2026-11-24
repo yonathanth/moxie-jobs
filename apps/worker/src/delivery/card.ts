@@ -16,17 +16,18 @@ import {
 
 /**
  * The job alert message. Pure. No emoji; labelled facts with a blank line
- * between each, so the card reads easily. Buttons:
- *   [ Apply | View job ] [ Similar jobs ]   Apply = exact application link; View job = the original post
- *   [ Get a CV tailored to this job ]
- * "Similar jobs" (same profession, else category) and the CV button open the
- * Mini App (needs https); on http (local dev) they fall back to callbacks the bot answers.
+ * between each, so the card reads easily. Requirements and how to apply
+ * (with the application link or the original post) are in the text.
+ * Two buttons side by side, both opening the Mini App (needs https):
+ *   [ See details ] [ More jobs ]   the job's page / the For you feed
+ * On http (local dev) they fall back to callbacks the bot answers.
  */
 
 export interface CardJob extends JobFacts, ApplyFields {
   id: string;
   summary: string;
   firstSeenAt: Date;
+  requirements?: string[];
 }
 
 export interface InlineButton {
@@ -47,8 +48,9 @@ export function escapeHtml(text: string): string {
 
 /** Callback data (≤ 64 bytes), used when the Mini App can't open (http in local dev). */
 export const MORE_JOBS_CALLBACK = "mj";
-export function cvCallback(deliveryId: string): string {
-  return `cv:${deliveryId}`;
+/** "See details" when the Mini App can't open: the bot answers with how to apply and the link. */
+export function detailsCallback(deliveryId: string): string {
+  return `ap:${deliveryId}`;
 }
 
 export function buildCard(
@@ -84,8 +86,17 @@ export function buildCard(
 
   lines.push("", e(job.summary));
 
-  const how = applyHowText(job);
-  if (how) lines.push("", `<b>How to apply:</b> ${e(how)}`);
+  const requirements = job.requirements ?? [];
+  if (requirements.length) lines.push("", "<b>Requirements:</b>", ...requirements.map((r) => `• ${e(r)}`));
+
+  const target = applyTarget(job);
+  // Click tracking (/r/:deliveryId) needs a public https API; otherwise link straight to the target.
+  const applyUrl = opts.publicApiUrl?.startsWith("https://")
+    ? new URL(`/r/${opts.deliveryId}`, opts.publicApiUrl).toString()
+    : /^https?:\/\//i.test(target.url)
+      ? target.url
+      : null;
+  lines.push("", `<b>How to apply:</b> ${howToApply(job, target.label, applyUrl, opts.sourceTitle)}`);
 
   const missing = notStated(job);
   lines.push("");
@@ -93,23 +104,28 @@ export function buildCard(
   lines.push(`<i>via ${e(opts.sourceTitle)}</i>`);
 
   const app = opts.webAppUrl?.startsWith("https://") ? opts.webAppUrl : null;
-  const target = applyTarget(job);
-  const applyUrl = opts.publicApiUrl?.startsWith("https://")
-    ? new URL(`/r/${opts.deliveryId}`, opts.publicApiUrl).toString()
-    : /^https?:\/\//i.test(target.url)
-      ? target.url
-      : null;
+  const row: InlineButton[] = app
+    ? [
+        { text: "See details", web_app: { url: new URL(`/app/jobs/${job.id}`, app).toString() } },
+        { text: "More jobs", web_app: { url: `${new URL("/app/jobs", app).toString()}?scope=for_you` } },
+      ]
+    : [
+        { text: "See details", callback_data: detailsCallback(opts.deliveryId) },
+        { text: "More jobs", callback_data: MORE_JOBS_CALLBACK },
+      ];
+  return { text: lines.join("\n"), buttons: [row] };
+}
 
-  const row: InlineButton[] = [];
-  if (applyUrl) row.push({ text: target.label, url: applyUrl });
-  row.push(
-    app
-      ? { text: "Similar jobs", web_app: { url: `${new URL("/app/jobs", app).toString()}?scope=all&similar=${job.id}` } }
-      : { text: "Similar jobs", callback_data: MORE_JOBS_CALLBACK },
-  );
-  const cvText = "Get a CV tailored to this job";
-  const cv: InlineButton = app
-    ? { text: cvText, web_app: { url: `${new URL("/app/cvs/new", app).toString()}?mode=tailor&jobId=${job.id}` } }
-    : { text: cvText, callback_data: cvCallback(opts.deliveryId) };
-  return { text: lines.join("\n"), buttons: [row, [cv]] };
+/** "Send your CV to hr@x.com." plus the link: the application page, or the original post when that's all there is. */
+function howToApply(job: CardJob, label: string, url: string | null, sourceTitle: string): string {
+  const e = escapeHtml;
+  const how = applyHowText(job);
+  const exact = label === "Apply";
+  const link = url ? `<a href="${e(url).replace(/"/g, "&quot;")}">${exact ? "Apply online" : "original post"}</a>` : null;
+  if (how) {
+    if (!link) return e(how);
+    return exact ? `${e(how)}\n${link}` : `${e(how)}. Details in the ${link}.`;
+  }
+  if (exact) return link ? link : "Apply online through the employer's link.";
+  return link ? `Follow the instructions in the ${link}.` : `Follow the instructions in the original post on ${e(sourceTitle)}.`;
 }

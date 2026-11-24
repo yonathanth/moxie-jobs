@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Briefcase, FileText, UserRound } from "lucide-react";
+import { Briefcase, Crown, FileText, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,9 +10,10 @@ import { useSession } from "./miniapp/session";
 
 const ITEMS = [
   { href: "/app/jobs", label: "Jobs", icon: Briefcase, match: (p: string) => p.startsWith("/app/jobs") },
-  { href: "/app/cvs", label: "CVs", icon: FileText, match: (p: string) => p.startsWith("/app/cvs") },
-  // Profile holds the account: plan, alerts, preferences, plans.
-  { href: "/app", label: "Profile", icon: UserRound, match: (p: string) => p === "/app" || p.startsWith("/app/plans") || p.startsWith("/app/preferences") },
+  { href: "/app/cvs", label: "CV", icon: FileText, match: (p: string) => p.startsWith("/app/cvs") },
+  { href: "/app/plans", label: "Plans", icon: Crown, match: (p: string) => p.startsWith("/app/plans") },
+  // Profile holds the account: plan, alerts, preferences.
+  { href: "/app", label: "Profile", icon: UserRound, match: (p: string) => p === "/app" || p.startsWith("/app/preferences") },
 ] as const;
 
 /** Top-level pages show the bar; editors, detail pages, onboarding and admin don't. */

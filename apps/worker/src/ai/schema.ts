@@ -68,6 +68,7 @@ export const extractedJobSchema = z.object({
     .catch({ method: "source", url: null, email: null, telegram: null, phone: null, notes: null }),
   summary: str,
   skills: z.array(z.string()).catch([]).default([]),
+  requirements: z.array(z.string()).catch([]).default([]),
   flags: z.array(z.string()).catch([]).default([]),
 });
 

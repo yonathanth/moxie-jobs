@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { z } from "zod";
 import type { User } from "@ethio/db";
@@ -51,8 +51,8 @@ export class BillingController {
   /** SantimPay server-to-server callback. Always 200; the payment is confirmed through their status API. */
   @Post("santimpay/notify")
   @HttpCode(200)
-  async notify(@Body() body: unknown): Promise<{ ok: true }> {
-    await this.billing.handleNotify(body);
+  async notify(@Headers() headers: Record<string, string | string[] | undefined>, @Body() body: unknown): Promise<{ ok: true }> {
+    await this.billing.handleNotify(headers, body);
     return { ok: true };
   }
 }

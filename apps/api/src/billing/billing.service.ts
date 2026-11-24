@@ -1,4 +1,15 @@
-import { ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, ServiceUnavailableException, BadGatewayException } from "@nestjs/common";
+import {
+  BadGatewayException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  type OnModuleDestroy,
+  type OnModuleInit,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import type { Payment, User } from "@ethio/db";
 import {
   DEFAULT_PLAN_LIMITS,
@@ -31,12 +42,16 @@ import { classifyStatus, SantimPayClient, SantimPayError } from "./santimpay.cli
 const VERIFY_GAP_MS = 4_000;
 /** A checkout never completed after this long is closed as failed. */
 const ABANDON_AFTER_MS = 6 * 60 * 60_000;
+/** Pending payments are re-checked this often, in case SantimPay's callback never arrives (docs FAQ Q6). */
+const RECONCILE_EVERY_MS = 2 * 60_000;
 
 @Injectable()
-export class BillingService {
+export class BillingService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BillingService.name);
   private readonly client: SantimPayClient | null;
   private readonly lastVerify = new Map<string, number>();
+  private reconcileTimer: NodeJS.Timeout | null = null;
+  private reconciling = false;
 
   constructor(
     @Inject(ENV) private readonly env: Env,
@@ -47,9 +62,46 @@ export class BillingService {
   ) {
     this.client =
       env.SANTIMPAY_MERCHANT_ID && env.SANTIMPAY_PRIVATE_KEY
-        ? new SantimPayClient({ merchantId: env.SANTIMPAY_MERCHANT_ID, privateKey: env.SANTIMPAY_PRIVATE_KEY, baseUrl: env.SANTIMPAY_BASE_URL })
+        ? new SantimPayClient({
+            merchantId: env.SANTIMPAY_MERCHANT_ID,
+            privateKey: env.SANTIMPAY_PRIVATE_KEY,
+            baseUrl: env.SANTIMPAY_BASE_URL,
+            publicKey: env.SANTIMPAY_PUBLIC_KEY,
+          })
         : null;
     if (!this.client) this.logger.warn("SantimPay not configured (SANTIMPAY_MERCHANT_ID / SANTIMPAY_PRIVATE_KEY): checkout disabled");
+  }
+
+  // Production only: local dev shares the database, and activating a payment messages the user.
+  onModuleInit() {
+    if (!this.client || this.env.NODE_ENV !== "production") return;
+    this.reconcileTimer = setInterval(() => void this.reconcile(), RECONCILE_EVERY_MS);
+    this.reconcileTimer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.reconcileTimer) clearInterval(this.reconcileTimer);
+  }
+
+  /** Re-checks pending payments with SantimPay; verify() also closes ones abandoned for ABANDON_AFTER_MS. */
+  async reconcile(): Promise<void> {
+    if (this.reconciling) return;
+    this.reconciling = true;
+    try {
+      const pending = await this.prisma.payment.findMany({
+        where: { status: "pending", createdAt: { lt: new Date(Date.now() - 60_000) } },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take: 50,
+      });
+      for (const { id } of pending) {
+        await this.verify(id).catch((err: unknown) => this.logger.warn(`reconcile ${id} failed: ${String(err)}`));
+      }
+    } catch (err) {
+      this.logger.error(`reconcile failed: ${String(err)}`);
+    } finally {
+      this.reconciling = false;
+    }
   }
 
   async pricing(): Promise<PricingDto> {
@@ -121,15 +173,28 @@ export class BillingService {
     return toDto(payment);
   }
 
-  /** Webhook: the body is only a hint; SantimPay's signed status API decides. Never throws. */
-  async handleNotify(body: unknown): Promise<void> {
-    const b = (body ?? {}) as Record<string, unknown>;
+  /**
+   * Webhook. The callback only tells us which payment to look at; SantimPay's
+   * status API still decides. A callback whose "signed-token" checks out (SDK
+   * 2.0) skips the per-payment throttle; an unsigned or forged one is logged
+   * and only gets a throttled status check, so it can't change anything or make
+   * us hammer SantimPay. Never throws.
+   */
+  async handleNotify(headers: Record<string, string | string[] | undefined>, body: unknown): Promise<void> {
+    if (!this.client) return;
+    let signed: Record<string, unknown> | null = null;
+    try {
+      signed = this.client.verifyCallback(headers, body);
+    } catch (err) {
+      this.logger.warn(`notify signature not verified (${err instanceof Error ? err.message : String(err)}): ${JSON.stringify(body ?? null).slice(0, 300)}`);
+    }
+    const b = (signed ?? body ?? {}) as Record<string, unknown>;
     const id = typeof b.thirdPartyId === "string" ? b.thirdPartyId : typeof b.id === "string" ? b.id : null;
     if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
       this.logger.warn(`notify without a usable id: ${JSON.stringify(b).slice(0, 300)}`);
       return;
     }
-    this.lastVerify.delete(id); // a notify is fresh news: don't throttle it
+    if (signed) this.lastVerify.delete(id); // genuine fresh news from SantimPay: don't throttle it
     await this.verify(id).catch((err: unknown) => this.logger.error(`notify verify ${id} failed: ${String(err)}`));
   }
 
@@ -169,8 +234,9 @@ export class BillingService {
       await this.prisma.payment.updateMany({ where: { id, status: "pending" }, data: { status: state, error: remote?.message ?? null } });
       return this.prisma.payment.findUnique({ where: { id } });
     }
-    if (!amountMatches(payment.amount, remote?.amount)) {
-      this.logger.error(`payment ${id}: amount mismatch (expected ${payment.amount}, got ${String(remote?.amount)})`);
+    const wrongCurrency = !!remote?.currency && remote.currency.toUpperCase() !== "ETB";
+    if (wrongCurrency || !amountMatches(payment.amount, remote?.amount)) {
+      this.logger.error(`payment ${id}: amount mismatch (expected ${payment.amount} ETB, got ${String(remote?.amount)} ${remote?.currency ?? ""})`);
       await this.prisma.payment.updateMany({ where: { id, status: "pending" }, data: { status: "failed", error: "amount_mismatch" } });
       return this.prisma.payment.findUnique({ where: { id } });
     }
