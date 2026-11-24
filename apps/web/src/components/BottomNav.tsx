@@ -44,11 +44,11 @@ export function BottomNav() {
                 aria-current={active ? "page" : undefined}
                 className={clsx(
                   "flex flex-col items-center gap-1 pb-2 pt-1.5 text-[11px] font-semibold transition-colors",
-                  active ? "text-accent-strong" : "text-hint hover:text-text",
+                  active ? "font-bold text-ink" : "text-hint hover:text-text",
                 )}
               >
-                {/* The current tab is just coloured (icon and label); the others are a step darker than before. */}
-                <Icon className="my-[3px] size-[22px]" strokeWidth={active ? 2.4 : 2} />
+                {/* The current tab: near-black and bold (thicker icon); the others grey. */}
+                <Icon className="my-[3px] size-[22px]" strokeWidth={active ? 2.6 : 1.9} />
                 {label}
               </Link>
             </li>
