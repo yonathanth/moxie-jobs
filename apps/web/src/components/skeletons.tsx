@@ -52,7 +52,7 @@ export function ScreenSkeleton({ variant = "list" }: { variant?: SkeletonVariant
           <Header />
           <div className="mt-5 flex flex-col gap-3">
             {[0, 1].map((i) => (
-              <Card key={i} className="flex items-center gap-3.5 p-4">
+              <Card key={i} className="flex min-h-[96px] items-center gap-4 px-4 py-5">
                 <Skeleton className="size-10 rounded-xl" />
                 <div className="flex-1">
                   <Skeleton className="h-4 w-2/5" />
@@ -63,7 +63,11 @@ export function ScreenSkeleton({ variant = "list" }: { variant?: SkeletonVariant
             ))}
           </div>
           <Skeleton className="mb-2 mt-5 h-4 w-20" />
-          <RowsSkeleton count={3} />
+          <div className="grid grid-cols-2 gap-3">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="aspect-[1/1.414] rounded-2xl" />
+            ))}
+          </div>
         </>
       )}
       {variant === "list" && (
