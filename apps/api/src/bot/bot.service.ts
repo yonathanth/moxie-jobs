@@ -29,7 +29,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 import * as M from "./bot.messages";
 
-const ALLOWED_UPDATES = ["message", "my_chat_member", "callback_query"] as const;
+const ALLOWED_UPDATES = ["message", "my_chat_member", "callback_query", "inline_query"] as const;
 
 @Injectable()
 export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -389,6 +389,12 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     pm.command("help", (ctx) => ctx.reply(M.HELP_TEXT, { parse_mode: "HTML" }));
 
     // User blocked / unblocked the bot.
+    // Inline mode is on for the Mini App's share pictures. Someone typing @bot in a chat gets
+    // no results, just a button into the bot (instead of an endless spinner).
+    this.bot.on("inline_query", (ctx) =>
+      ctx.answerInlineQuery([], { cache_time: 3600, is_personal: false, button: { text: "Open Meklit Jobs", start_parameter: "inline" } }),
+    );
+
     this.bot.on("my_chat_member", async (ctx) => {
       if (ctx.chat.type !== "private") return;
       const status = ctx.myChatMember.new_chat_member.status;

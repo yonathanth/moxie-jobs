@@ -264,11 +264,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: `radial-gradient(circle at 50% 40%, #ffffff 0%, ${ACCENT_SOFT} 70%)`,
+            gap: 6,
+            background: `radial-gradient(circle at 50% 45%, #ffffff 0%, ${ACCENT_SOFT} 70%)`,
+            fontFamily: "Geist",
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- next/og */}
-          <img src={MOXIE_URI} width={470} height={470} alt="" style={{ marginTop: 10 }} />
+          <img src={MOXIE_URI} width={230} height={230} alt="" />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", fontSize: 92, fontWeight: 700, lineHeight: 0.98, letterSpacing: -3 }}>
+            <div style={{ display: "flex", color: INK }}>Meklit</div>
+            <div style={{ display: "flex", color: ACCENT }}>Jobs</div>
+          </div>
         </div>,
         { size: { width: 640, height: 640 }, png: true },
       );
