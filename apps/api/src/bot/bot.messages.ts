@@ -3,7 +3,7 @@ import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 /** Bot copy and keyboards. Pure (no I/O) so it is easy to test and edit. */
 
 export const BOT_COMMANDS = [
-  { command: "start", description: "Start / open GoMoxie Jobs" },
+  { command: "start", description: "Start / open Meklit Jobs" },
   { command: "jobs", description: "Open my job feed" },
   { command: "settings", description: "Edit what jobs I get" },
   { command: "pause", description: "Pause job alerts" },
@@ -40,11 +40,11 @@ export function welcomeNew(firstName: string | null, webAppUrl: string): Reply {
     // The wave is the one emoji the bot uses (the user asked for it on the greeting).
     text:
       `👋 <b>Selam${name}!</b>\n\n` +
-      "<b>Here's what I'll do for you:</b>\n" +
-      "• Only the jobs that match your preferences, the moment they're posted\n" +
-      "• Create and improve your CVs\n" +
-      "• A CV tailored to every job you apply for\n\n" +
-      "Set up your preferences to get started. It takes about a minute." +
+      "Here's what this bot will do for you:\n\n" +
+      "<b>Matched jobs:</b> get new jobs that fit your preferences as soon as they're posted.\n" +
+      "<b>CV builder:</b> create a strong CV, or improve the one you have.\n" +
+      "<b>Tailored applications:</b> get a CV adapted to each job you apply for.\n\n" +
+      "To get started, set up your job preferences. It takes less than a minute." +
       devHint(webAppUrl),
     reply_markup: keyboard([webAppButton("Set up my preferences", webAppUrl, "/app/onboarding")]),
   };
@@ -80,16 +80,27 @@ export function jobsReply(webAppUrl: string): Reply {
 
 export function needsOnboarding(webAppUrl: string): Reply {
   return {
-    text: "First, set up your preferences so I know which jobs to send you. It takes about a minute." + devHint(webAppUrl),
+    text: "First, set up your preferences so I know which jobs to send you. It takes less than a minute." + devHint(webAppUrl),
     reply_markup: keyboard([webAppButton("Set up my preferences", webAppUrl, "/app/onboarding")]),
   };
 }
+
+/** Shown in the empty chat before /start ("What can this bot do?"), under the BotFather picture. Max 512 characters. */
+export const BOT_DESCRIPTION =
+  "Meklit Jobs sends you jobs in Ethiopia that fit you, the moment they're posted.\n\n" +
+  "• Matched jobs from Ethiopia's job channels and websites, in one place\n" +
+  "• Create a strong CV, or improve the one you have\n" +
+  "• A CV tailored to every job you apply for\n\n" +
+  "Tap Start to set up your job preferences. It takes less than a minute.";
+
+/** On the bot's profile and when it's shared. Max 120 characters. */
+export const BOT_SHORT_DESCRIPTION = "Jobs in Ethiopia that fit you, sent the moment they're posted. Plus a CV for every job.";
 
 export const PAUSED_TEXT = "Job alerts paused. Send /resume whenever you want them back.";
 export const RESUMED_TEXT = "Job alerts are back on.";
 
 export const HELP_TEXT =
-  "<b>How GoMoxie Jobs works</b>\n\n" +
+  "<b>How Meklit Jobs works</b>\n\n" +
   "1. Tell me your profession, field of study, experience and where you want to work.\n\n" +
   "2. I collect new jobs from Ethiopian job channels and websites around the clock.\n\n" +
   "3. When a job fits you, I send it here with a button to apply.\n\n" +
@@ -164,7 +175,7 @@ export function sharedJob(job: { id: string; title: string; company: string | nu
     : "Open it to see the full details and how to apply.";
   const pitch = onboarded
     ? ""
-    : "\n\nWant jobs like this sent to you the moment they're posted? Set up free alerts in about a minute.";
+    : "\n\nWant jobs like this sent to you the moment they're posted? Set up free alerts in less than a minute.";
   return {
     text: `${head}\n\n${body}${pitch}` + devHint(webAppUrl),
     reply_markup: keyboard(
@@ -173,17 +184,17 @@ export function sharedJob(job: { id: string; title: string; company: string | nu
           ? webAppButton("See similar jobs", webAppUrl, `/app/jobs?scope=all&similar=${job.id}`)
           : webAppButton("View job and apply", webAppUrl, `/app/jobs/${job.id}`),
       ],
-      onboarded ? [] : [webAppButton("Get free job alerts", webAppUrl, "/app/onboarding")],
+      onboarded ? [] : [webAppButton("Get jobs that fit you", webAppUrl, "/app/onboarding")],
     ),
   };
 }
 
 /** Caption of a shared job (the photo message sent from the Mini App's Share). Premium jobs pass the employer kind as `who`, never the name. */
-export function jobShareCaption(job: { title: string; who: string | null; location: string | null; deadline: Date | null }): string {
+export function jobShareCaption(job: { title: string; who: string | null; location: string | null; deadline: Date | null }, botUrl: string): string {
   const lines = [`<b>${escapeHtml(job.title)}</b>`];
   if (job.who) lines.push(escapeHtml(job.who));
   const meta = [job.location, job.deadline ? `apply by ${job.deadline.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Addis_Ababa" })}` : null].filter(Boolean);
   if (meta.length) lines.push(escapeHtml(meta.join(" · ")));
-  lines.push("", "Thought of you when I saw this. Get jobs like it on GoMoxie Jobs, free on Telegram.");
+  lines.push("", `Get more jobs like this on <a href="${escapeHtml(botUrl)}?start=src_share">Meklit Jobs</a>`);
   return lines.join("\n");
 }

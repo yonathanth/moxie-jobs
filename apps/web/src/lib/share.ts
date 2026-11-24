@@ -17,7 +17,7 @@ export function jobShareText(job: Omit<ShareableJob, "id">): string {
   const lines = [`${job.title}${who ? ` at ${who}` : ""}`];
   const meta = [job.location, job.deadline ? `apply by ${new Date(job.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : null].filter(Boolean);
   if (meta.length) lines.push(meta.join(" · "));
-  lines.push(`Thought of you when I saw this. Get jobs like it on ${APP_NAME}, free on Telegram.`);
+  lines.push(`Get more jobs like this on ${APP_NAME}`);
   return lines.join("\n");
 }
 

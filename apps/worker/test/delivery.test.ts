@@ -150,9 +150,10 @@ describe("buildCard", () => {
     expect(buildCard(job({ applyMethod: "email", applyEmail: "hr@x.com" }), opts).text).not.toContain("hr@x.com");
   });
 
-  it("lists requirements", () => {
-    const { text } = buildCard(job({ requirements: ["BA in Accounting", "5+ years <audit>"] }), opts);
-    expect(text).toContain("<b>Requirements:</b>\n• BA in Accounting\n• 5+ years &lt;audit&gt;");
+  it("leaves requirements out (they are on the job page)", () => {
+    const { text } = buildCard(job({ requirements: ["BA in Accounting", "5+ years audit"] }), opts);
+    expect(text).not.toContain("Requirements");
+    expect(text).not.toContain("BA in Accounting");
   });
 
   it("labels the employer type and says what the post didn't state", () => {

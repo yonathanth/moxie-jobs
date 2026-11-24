@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { MiniAppProvider } from "@/components/miniapp/MiniAppProvider";
 
 export const metadata: Metadata = {
-  title: "GoMoxie Jobs",
+  title: "Meklit Jobs",
   robots: { index: false, follow: false },
 };
 

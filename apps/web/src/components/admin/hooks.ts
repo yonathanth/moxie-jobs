@@ -1,7 +1,7 @@
 "use client";
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminGrantPlan, AdminSettingsDto, AdminUserPlanFilter, AdminUserStatusFilter } from "@ethio/shared";
+import type { AdminGrantPlan, AdminSettingsDto, AdminUserPlanFilter, AdminUserStatusFilter, BroadcastAudience, BroadcastRequest } from "@ethio/shared";
 import { api } from "@/lib/api";
 import { useSession } from "../miniapp/session";
 
@@ -110,4 +110,15 @@ export function useGrantPlan(id: string) {
       void qc.invalidateQueries({ queryKey: ["admin", "overview"] });
     },
   });
+}
+
+/** How many people a broadcast would reach. */
+export function useBroadcastAudience(audience: BroadcastAudience) {
+  const { token } = useSession();
+  return useQuery({ queryKey: ["admin", "broadcast", audience], queryFn: () => api.admin.broadcastAudience(token, audience), staleTime: 30_000 });
+}
+
+export function useBroadcast() {
+  const { token } = useSession();
+  return useMutation({ mutationFn: (body: BroadcastRequest) => api.admin.broadcast(token, body) });
 }

@@ -55,6 +55,7 @@ model User {
   payments    Payment[]
   cvs         CvDocument[]
   savedJobs   SavedJob[]
+  promoLogs   PromoLog[]
 
   @@index([createdAt])
 }
@@ -308,6 +309,23 @@ model JobSighting {
 }
 
 // Jobs a user bookmarked in the Mini App ("Saved" tab).
+/// Marketing messages the bot sent (upgrade, CV, packs, alert limit, premium match, renewals):
+/// one per user per send slot, so the rotation knows what each person got and when.
+model PromoLog {
+  id     String   @id @default(uuid())
+  userId String
+  kind   String
+  /// The send slot, "2026-11-25 12:30" (Addis Ababa time): at most one message per slot.
+  slot   String
+  /// What it was about: a job id (premium match) or a plan end date (renewals).
+  ref    String?
+  sentAt DateTime @default(now())
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slot])
+  @@index([userId, kind, sentAt])
+}
+
 model SavedJob {
   userId    String
   jobId     String

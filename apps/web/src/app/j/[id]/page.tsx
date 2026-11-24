@@ -32,9 +32,8 @@ export default async function SharedJobPage({ params }: Props) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 pb-10 pt-6">
       <header className="flex items-center gap-2 px-1">
-        <span className="grid size-8 place-items-center rounded-lg border border-accent-mid bg-linear-to-b from-accent-mid to-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
-          <Briefcase className="size-4" />
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element -- static logo */}
+        <img src="/logo.svg" alt="" width={32} height={32} className="size-8" />
         <span className="text-[15px] font-bold tracking-tight">{APP_NAME}</span>
       </header>
 

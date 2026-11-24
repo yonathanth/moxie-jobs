@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { APP_NAME } from "@/lib/config";
+import { LOGO_URI } from "@/lib/og/kit";
 import { getPublicJob, shortDate } from "@/lib/publicJob";
 
 export const size = { width: 1200, height: 630 };
@@ -44,22 +45,8 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 14,
-                background: `linear-gradient(180deg, #ff7a2e, ${ACCENT})`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "white",
-                fontSize: 30,
-                fontWeight: 800,
-              }}
-            >
-              M
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element -- next/og draws plain <img> */}
+            <img src={LOGO_URI} width={54} height={54} alt="" />
             <div style={{ fontSize: 30, fontWeight: 700, color: INK }}>{APP_NAME}</div>
           </div>
           {job && (

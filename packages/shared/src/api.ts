@@ -68,6 +68,8 @@ export interface MeStats {
   sentThisWeek: number;
   /** Premium jobs matched in the last 7 days that the plan doesn't include. */
   lockedThisWeek: number;
+  /** Matches held back today by the daily alert limit (waiting in the feed). */
+  waitingToday: number;
 }
 
 export interface PricingDto {
@@ -460,4 +462,25 @@ export interface CvTemplateDto {
   category: string;
   /** Picture of the template with sample content. */
   previewUrl: string;
+}
+
+/** Marketing messages an admin can send by hand (Admin → Broadcast). */
+export const BROADCAST_KINDS = ["upgrade", "cv", "packs", "setup", "premium"] as const;
+export type BroadcastKind = (typeof BROADCAST_KINDS)[number];
+/** Who gets it. Blocked and paused people never do. */
+export const BROADCAST_AUDIENCES = ["free", "paid", "everyone", "no_cv", "not_set_up"] as const;
+export type BroadcastAudience = (typeof BROADCAST_AUDIENCES)[number];
+
+export interface BroadcastRequest {
+  kind: BroadcastKind;
+  audience: BroadcastAudience;
+  /** premium: the job to show (its employer stays hidden). */
+  jobId?: string;
+  /** Send only to the admin asking. */
+  test?: boolean;
+}
+
+export interface BroadcastResult {
+  /** People who will get it (1 for a test). */
+  count: number;
 }

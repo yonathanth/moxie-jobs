@@ -4,7 +4,7 @@ import { BackfillWatcher } from "./delivery/backfill";
 import { matchAndQueue } from "./delivery/matcher";
 import { Sender } from "./delivery/sender";
 import { OnboardingNudge } from "./delivery/nudge";
-import { Teaser } from "./delivery/teaser";
+import { Promoter } from "./delivery/promo";
 import { Extractor } from "./ai/extract";
 import { prisma } from "./db";
 import { env } from "./env";
@@ -30,11 +30,12 @@ async function main() {
   const { client: ai, model } = createAiClient();
 
   const sender = new Sender();
-  const teaser = new Teaser();
+  // Marketing pictures in two daily slots (replaces the old 18:00 summary).
+  const promoter = new Promoter();
   const nudge = new OnboardingNudge();
   if (e.DELIVERY_ENABLED) {
     sender.start();
-    teaser.start();
+    promoter.start();
     nudge.start();
   }
   else log.warn("delivery disabled (DELIVERY_ENABLED=false): jobs are matched but not sent");
@@ -91,7 +92,7 @@ async function main() {
     web.stop();
     await listener?.stop().catch(() => undefined);
     await pipeline.stop();
-    teaser.stop();
+    promoter.stop();
     nudge.stop();
     await sender.stop();
     await prisma.$disconnect();

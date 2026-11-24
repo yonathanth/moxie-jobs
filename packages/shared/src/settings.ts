@@ -30,6 +30,13 @@ export const settingsSchema = z.object({
       quietToEat: z.number().int().min(0).max(23).default(7),
     })
     .default({ maxJobAgeHours: 48, teaserHourEat: 18, quietFromEat: 22, quietToEat: 7 }),
+  /** Marketing messages (pictures, worker `delivery/promo.ts`): one per user in each send slot (Addis Ababa "HH:MM"). */
+  marketing: z
+    .object({
+      enabled: z.boolean().default(true),
+      slotsEat: z.array(z.string().regex(/^([01]d|2[0-3]):[0-5]d$/)).max(4).default(["12:30", "19:00"]),
+    })
+    .default({ enabled: true, slotsEat: ["12:30", "19:00"] }),
   /** One-time CV prices (ETB) and how many unpaid (locked) CVs a person may have at once. */
   /** Deprecated (CVs aren't sold one by one any more); kept so old rows still parse. */
   cvPrices: z.object({ cv_new: z.number().int().min(1).max(100_000), cv_tailor: z.number().int().min(1).max(100_000) }).partial().default({}),

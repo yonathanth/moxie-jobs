@@ -4,7 +4,7 @@ import { BOT_URL } from "@/lib/config";
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-4 py-12">
-      <p className="text-sm font-semibold tracking-wide text-accent">GoMoxie Jobs</p>
+      <p className="text-sm font-semibold tracking-wide text-accent">Meklit Jobs</p>
       <h1 className="mt-2 text-3xl font-bold leading-tight">Jobs in Ethiopia that fit you, sent straight to Telegram.</h1>
       <p className="mt-4 text-hint">
         We collect new vacancies from Ethiopia&apos;s job channels and websites around the clock and send you only the ones

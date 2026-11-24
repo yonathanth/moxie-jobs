@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { RouteSkeleton, ScreenSkeleton } from "../skeletons";
-import type { MeDto } from "@ethio/shared";
+import { DEFAULT_PLAN_LIMITS, type MeDto } from "@ethio/shared";
 import { api, ApiError } from "@/lib/api";
 import { BOT_URL, DEV_AUTH, DEV_TELEGRAM_ID } from "@/lib/config";
 import { initDataUserId, readInitData, startRoute } from "@/lib/telegram";
@@ -130,7 +130,7 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
       return goStart ? <ScreenSkeleton variant="detail" /> : <RouteSkeleton />;
     case "outside-telegram":
       return (
-        <CenteredMessage title="Open this in Telegram" body="GoMoxie Jobs runs inside Telegram. Open the bot to continue.">
+        <CenteredMessage title="Open this in Telegram" body="Meklit Jobs runs inside Telegram. Open the bot to continue.">
           <a
             href={BOT_URL}
             className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-ink px-5 font-semibold text-white"
@@ -148,7 +148,36 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
     case "ready":
       if (goStart && !startHandled) return <ScreenSkeleton variant="detail" />;
       return (
-        <SessionContext.Provider value={{ token: state.token, me: state.me, setMe }}>{children}</SessionContext.Provider>
+        <SessionContext.Provider value={{ token: state.token, me: devView(state.me), setMe }}>{children}</SessionContext.Provider>
       );
+  }
+}
+
+/**
+ * Local development only: see the Mini App as a free user (upgrade pop-ups, the
+ * Today card) without touching the database (which local dev shares with
+ * production). Open /app?as=free&sent=10&waiting=4 once; it sticks for the tab.
+ * /app?as=me goes back. Display only: the API still uses the real plan.
+ */
+function devView(me: MeDto): MeDto {
+  if (process.env.NODE_ENV === "production" || typeof window === "undefined") return me;
+  try {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("as") === "me") sessionStorage.removeItem("dev:as");
+    else if (q.get("as") === "free") sessionStorage.setItem("dev:as", JSON.stringify({ sent: Number(q.get("sent") ?? 0), waiting: Number(q.get("waiting") ?? 0), locked: Number(q.get("locked") ?? 0) }));
+    const raw = sessionStorage.getItem("dev:as");
+    if (!raw) return me;
+    const v = JSON.parse(raw) as { sent: number; waiting: number; locked: number };
+    return {
+      ...me,
+      plan: "free",
+      planExpiresAt: null,
+      effectivePlan: "free",
+      beta: false,
+      limits: DEFAULT_PLAN_LIMITS.free,
+      stats: { ...me.stats, sentToday: v.sent, waitingToday: v.waiting, lockedThisWeek: v.locked },
+    };
+  } catch {
+    return me;
   }
 }

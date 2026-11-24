@@ -1,7 +1,7 @@
 "use client";
 
 import { RowsSkeleton } from "@/components/skeletons";
-import { ChevronRight, CreditCard, Inbox, Radio, SlidersHorizontal, Users, type LucideIcon } from "lucide-react";
+import { ChevronRight, CreditCard, Inbox, Megaphone, Radio, SlidersHorizontal, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useAdminOverview } from "@/components/admin/hooks";
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -41,6 +41,7 @@ export default function AdminHome() {
               body={`${o.data.sources.active} active channels and sites`}
               badge={o.data.sources.joinPending ? `${o.data.sources.joinPending} joining` : null}
             />
+            <NavCard href="/app/admin/broadcast" icon={Megaphone} title="Broadcast" body="Send a marketing picture to a group, or a test to you" />
             <NavCard href="/app/admin/plans" icon={CreditCard} title="Prices & limits" body="What each plan costs and includes" />
             <NavCard href="/app/admin/settings" icon={SlidersHorizontal} title="Settings" body="Beta, unpaid jobs, alert timing" />
           </div>

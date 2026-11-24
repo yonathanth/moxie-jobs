@@ -169,7 +169,7 @@ describe("saved and shared jobs", () => {
     expect(fresh.text).toContain("Nurse &lt;ICU&gt;");
     expect(fresh.text).toContain("free alerts");
     const buttons = fresh.reply_markup!.inline_keyboard.flat().map((b) => b.text);
-    expect(buttons).toEqual(["View job and apply", "Get free job alerts"]);
+    expect(buttons).toEqual(["View job and apply", "Get jobs that fit you"]);
 
     const known = sharedJob({ id: "abc", title: "Nurse", company: null, closed: true }, url, true);
     expect(known.text).not.toContain("free alerts");

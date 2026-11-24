@@ -31,6 +31,9 @@ import type {
   ResolveTermRequest,
   ResolveTermResponse,
   TaxonomyDto,
+  BroadcastAudience,
+  BroadcastRequest,
+  BroadcastResult,
 } from "@ethio/shared";
 import { API_URL } from "./config";
 
@@ -109,6 +112,8 @@ export const api = {
     user: (token: string, id: string) => request<AdminUserDetail>(`/admin/users/${id}`, { token }),
     grant: (token: string, id: string, body: AdminGrantPlan) =>
       request<AdminUserDetail>(`/admin/users/${id}/plan`, { method: "POST", token, body: JSON.stringify(body) }),
+    broadcastAudience: (token: string, audience: BroadcastAudience) => request<BroadcastResult>(`/admin/broadcast/audience?audience=${audience}`, { token }),
+    broadcast: (token: string, body: BroadcastRequest) => request<BroadcastResult>("/admin/broadcast", { method: "POST", token, body: JSON.stringify(body) }),
     addSource: (token: string, handle: string) => request<void>("/admin/sources", { method: "POST", token, body: JSON.stringify({ handle }) }),
   },
   cv: {

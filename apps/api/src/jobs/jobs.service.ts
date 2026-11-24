@@ -212,7 +212,7 @@ export class JobsService {
       who: isPremiumJob(job) ? kind : (job.company ?? kind),
       location: locationText(job),
       deadline: job.deadline,
-    });
+    }, `https://t.me/${this.env.TELEGRAM_BOT_USERNAME}`);
     const imageUrl = new URL(`/j/${job.id}/share.jpg`, this.env.WEB_APP_URL).toString();
     return { id: await this.bot.prepareJobShare(user, { jobId: job.id, imageUrl, caption }) };
   }

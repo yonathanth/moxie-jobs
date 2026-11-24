@@ -6,3 +6,5 @@ export * from "./api";
 export * from "./settings";
 export * from "./apply";
 export * from "./jobs";
+export * from "./alert-card";
+export * from "./promos";

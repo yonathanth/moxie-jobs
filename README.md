@@ -1,4 +1,4 @@
-# GoMoxie Jobs (Ethiopia)
+# Meklit Jobs (Ethiopia)
 
 Jobs from Ethiopia's Telegram job channels and websites, matched to each user's profession, degree, experience and city, delivered as Telegram bot messages and shown in a Telegram Mini App.
 

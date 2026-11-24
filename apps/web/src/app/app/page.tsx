@@ -9,7 +9,7 @@ import { usePaywall } from "@/components/paywall";
 import { EXPERIENCE_BANDS, PLAN_NAME, type MeDto, type PreferencesDto, type TaxonomyDto } from "@ethio/shared";
 import { usePreferences, useRefreshMe, useSetAlertsPaused, useTaxonomy } from "@/components/miniapp/hooks";
 import { useSession } from "@/components/miniapp/session";
-import { Badge, Button, Card, IconTile, PageHeader, Screen, Section, Sheet, Toast, Toggle, useToast } from "@/components/ui";
+import { Badge, Button, Card, cx, IconTile, PageHeader, Screen, Section, Sheet, Toast, Toggle, useToast } from "@/components/ui";
 import { haptic } from "@/lib/telegram";
 import { ContactForm } from "@/components/cv/ContactForm";
 import { formatDate } from "@/lib/plans";
@@ -114,39 +114,77 @@ function PlanBadge({ me }: { me: MeDto }) {
 }
 
 /** Today's alerts as one tappable card that opens the feed. */
+/**
+ * Today's alerts. On the free plan it nudges by where they are in the day: a
+ * quiet "Go unlimited" link, then "2 left today" near the limit, then the card
+ * itself becomes the upgrade prompt once the limit is reached. Paid: "Unlimited".
+ */
 function TodayCard({ me }: { me: MeDto }) {
+  const paywall = usePaywall();
   const cap = me.limits.dailyJobCap;
-  const used = Math.min(me.stats.sentToday, cap ?? Infinity);
   const n = me.stats.sentToday;
+  const used = Math.min(n, cap ?? Infinity);
+  const left = cap === null ? null : Math.max(0, cap - used);
+  const reached = left === 0;
+  const near = left !== null && !reached && left <= 2;
+  const upgrade = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    paywall.gate("daily_cap", { then: "/app/jobs?scope=for_you" });
+  };
+  const waiting = me.stats.waitingToday;
+
   return (
     <Link href="/app/jobs" className="group mt-5 block">
-      <Card className="transition-colors group-active:bg-neutral-50">
+      <Card className={cx("transition-colors group-active:bg-neutral-50", reached && "border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#ffffff_75%)]")}>
         <div className="flex items-center gap-3">
-          <IconTile tone="sky">
-            <Briefcase className="size-5" />
-          </IconTile>
+          <IconTile tone={reached ? "accent" : "sky"}>{reached ? <Lock className="size-5" /> : <Briefcase className="size-5" />}</IconTile>
           <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-semibold">{n === 0 ? "No new jobs yet today" : `${n} new ${n === 1 ? "job" : "jobs"} for you today`}</p>
-            <p className="text-[13px] text-hint">{me.stats.sentThisWeek} this week · open your feed</p>
+            <p className="text-[15px] font-semibold">
+              {reached ? "Today's limit reached" : n === 0 ? "No new jobs yet today" : `${n} new ${n === 1 ? "job" : "jobs"} for you today`}
+            </p>
+            <p className="text-[13px] text-hint">
+              {reached
+                ? waiting > 0
+                  ? `${waiting} more ${waiting === 1 ? "job is" : "jobs are"} waiting in your feed`
+                  : "New matches wait in your feed until tomorrow"
+                : `${me.stats.sentThisWeek} this week · open your feed`}
+            </p>
           </div>
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-white transition-transform group-hover:translate-x-0.5">
-            <ArrowRight className="size-4" />
-          </span>
+          {reached ? (
+            <button type="button" onClick={upgrade} className="shrink-0 rounded-full bg-accent px-3.5 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_-10px_rgba(255,94,31,0.8)]">
+              Upgrade
+            </button>
+          ) : (
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-white transition-transform group-hover:translate-x-0.5">
+              <ArrowRight className="size-4" />
+            </span>
+          )}
         </div>
-        {cap !== null && (
-          <div className="mt-4">
-            <div className="flex justify-between text-xs font-medium text-hint">
-              <span>Today&apos;s alerts</span>
-              <span>
-                {used}/{cap}
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs font-medium text-hint">
+            <span>{near ? `${left} ${left === 1 ? "alert" : "alerts"} left today` : "Today's alerts"}</span>
+            {cap === null ? (
+              <span className="text-emerald">Unlimited</span>
+            ) : (
+              <span className="flex items-center gap-2">
+                {!reached && (
+                  <button type="button" onClick={upgrade} className="font-semibold text-accent-strong">
+                    Go unlimited
+                  </button>
+                )}
+                <span>
+                  {used}/{cap}
+                </span>
               </span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-pill">
-              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(used / cap) * 100}%` }} />
-            </div>
-            {used >= cap && <p className="mt-2 text-[13px] text-hint">You&apos;ve reached today&apos;s limit. More come with Pro.</p>}
+            )}
           </div>
-        )}
+          {cap !== null && (
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-pill">
+              <div className={cx("h-full rounded-full transition-all", reached || near ? "bg-accent" : "bg-sky-500")} style={{ width: `${(used / cap) * 100}%` }} />
+            </div>
+          )}
+        </div>
       </Card>
     </Link>
   );

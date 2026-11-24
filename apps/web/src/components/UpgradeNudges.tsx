@@ -8,24 +8,25 @@ import { usePaywall, type PaywallReason } from "./paywall";
 import { formatDate } from "@/lib/plans";
 
 /**
- * Upgrade pop-ups at chosen moments, instead of banners. At most one per app open,
- * a few seconds after a main tab settles, never during the first day, and never
- * while another sheet is open. Each opens the paywall sheet with its own headline.
+ * Upgrade pop-ups at chosen moments, instead of banners: at most one per app
+ * open, 5 seconds after a main tab (Jobs, CV, Profile) loads, at least 8 hours
+ * apart, never in the first day or while another sheet is open. Each opens the
+ * paywall sheet with its own headline.
  *
- * Free plan:
- *   - hit today's alert limit      → "Go unlimited"            once a day
- *   - premium jobs matched (7 days) → "N premium jobs matched" every 3 days
- *   (and 2 days of quiet after any upgrade pop-up)
+ * Free plan, by what's true for them:
+ *   1. hit today's alert limit      → "4 more jobs are waiting"
+ *   2. premium jobs matched (7 days) → "3 premium jobs matched you this week"
+ *   3. otherwise the general Pro pitch and the CV pitch take turns
  * Paid plan: only a renewal reminder, 3 days before it ends and on the last day.
- * Upselling Pro → Career happens only when they hit a CV limit (the normal paywall).
  * Beta (everyone Pro): nothing.
  */
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const SHOW_ON = new Set(["/app", "/app/jobs", "/app/cvs"]);
-const DELAY_MS = 3_000;
-const QUIET_AFTER_ANY = 2 * DAY;
+const DELAY_MS = 5_000;
+/** Free-plan pop-ups are at least this far apart. */
+const QUIET_AFTER_ANY = 8 * HOUR;
 const FIRST_DAY = DAY;
 
 interface Nudge {
@@ -61,28 +62,48 @@ export function pickNudge(me: MeDto, now: number): Nudge | null {
   if (me.plan === "free" && me.effectivePlan === "free") {
     const cap = me.limits.dailyJobCap;
     if (cap !== null && me.stats.sentToday >= cap) {
+      const w = me.stats.waitingToday;
       return {
         key: "daily-cap",
         every: 20 * HOUR,
         quiet: true,
         reason: "daily_cap",
-        title: `You've had today's ${cap} alerts`,
-        body: "More matching jobs are waiting. Pro sends every match the moment it's posted, with no daily limit.",
-        then: "/app/jobs",
+        title: w > 0 ? `${w} more ${w === 1 ? "job is" : "jobs are"} waiting for you` : `You've had today's ${cap} alerts`,
+        body: "You've reached today's free limit. Pro sends every match the moment it's posted, with no daily limit.",
+        then: "/app/jobs?scope=for_you",
       };
     }
-    const n = me.stats.lockedThisWeek;
-    if (n > 0) {
+    const locked = me.stats.lockedThisWeek;
+    if (locked > 0 && (now - read("premium")) >= 3 * DAY) {
       return {
         key: "premium",
         every: 3 * DAY,
         quiet: true,
         reason: "premium_job",
-        title: `${n} premium ${n === 1 ? "job" : "jobs"} matched you this week`,
+        title: `${locked} premium ${locked === 1 ? "job" : "jobs"} matched you this week`,
         body: "NGO, UN, AU, embassy, international company and overseas jobs. Unlock them and get every new one instantly.",
         then: "/app/jobs?scope=for_you",
       };
     }
+    // Nothing specific: the Pro pitch and the CV pitch take turns.
+    const cvNext = read("pitch-pro") > read("pitch-cv");
+    return cvNext
+      ? {
+          key: "pitch-cv",
+          every: 0,
+          quiet: true,
+          reason: "cvs",
+          title: "A CV made for every job you apply to",
+          body: "Pro makes new CVs and tailors them to jobs every month, with AI polish.",
+        }
+      : {
+          key: "pitch-pro",
+          every: 0,
+          quiet: true,
+          reason: "daily_cap",
+          title: "Get every job that fits you, the moment it's posted",
+          body: "Pro has no daily alert limit and adds NGO, UN, embassy and jobs abroad.",
+        };
   }
   return null;
 }
@@ -115,11 +136,19 @@ export function UpgradeNudges() {
     if (shownThisOpen || isOpen || !me.onboarded || !SHOW_ON.has(pathname)) return;
     const timer = setTimeout(() => {
       const now = Date.now();
-      if (now - read("firstSeen") < FIRST_DAY) return;
+      // Local dev view (/app?as=free): show on every load so it can be checked.
+      const dev = process.env.NODE_ENV !== "production" && (() => {
+        try {
+          return !!sessionStorage.getItem("dev:as");
+        } catch {
+          return false;
+        }
+      })();
+      if (!dev && now - read("firstSeen") < FIRST_DAY) return;
       const nudge = pickNudge(me, now);
       if (!nudge) return;
-      if (now - read(nudge.key) < nudge.every) return;
-      if (nudge.quiet && now - read("any") < QUIET_AFTER_ANY) return;
+      if (!dev && now - read(nudge.key) < nudge.every) return;
+      if (!dev && nudge.quiet && now - read("any") < QUIET_AFTER_ANY) return;
       if (!gate(nudge.reason, { title: nudge.title, body: nudge.body, then: nudge.then })) return;
       shownThisOpen = true;
       write(nudge.key, now);

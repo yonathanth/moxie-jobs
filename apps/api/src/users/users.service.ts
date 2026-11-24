@@ -93,11 +93,12 @@ export class UsersService {
     const eat = new Date(now.getTime() + 3 * 3_600_000);
     const dayStart = new Date(Date.UTC(eat.getUTCFullYear(), eat.getUTCMonth(), eat.getUTCDate()) - 3 * 3_600_000);
     const weekAgo = new Date(now.getTime() - 7 * 24 * 3_600_000);
-    const [sentToday, sentThisWeek, lockedThisWeek] = await Promise.all([
+    const [sentToday, sentThisWeek, lockedThisWeek, waitingToday] = await Promise.all([
       this.prisma.delivery.count({ where: { userId, status: "sent", sentAt: { gte: dayStart } } }),
       this.prisma.delivery.count({ where: { userId, status: "sent", sentAt: { gte: weekAgo } } }),
       this.prisma.delivery.count({ where: { userId, status: { in: ["locked", "teased"] }, createdAt: { gte: weekAgo } } }),
+      this.prisma.delivery.count({ where: { userId, status: "skipped", error: "daily_cap", createdAt: { gte: dayStart } } }),
     ]);
-    return { sentToday, sentThisWeek, lockedThisWeek };
+    return { sentToday, sentThisWeek, lockedThisWeek, waitingToday };
   }
 }

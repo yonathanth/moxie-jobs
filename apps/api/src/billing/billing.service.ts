@@ -120,7 +120,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
 
     const amount = resolvePrices(await this.settings.get())[req.plan][req.period];
     const payment = await this.prisma.payment.create({ data: { userId: user.id, plan: req.plan, period: req.period, amount } });
-    return this.startCheckout(payment, `Ethio Jobs ${PLAN_NAME[req.plan]} (${PERIOD_LABEL[req.period]})`);
+    return this.startCheckout(payment, `Meklit Jobs ${PLAN_NAME[req.plan]} (${PERIOD_LABEL[req.period]})`);
   }
 
   /** Buy a CV pack. With cvId, one of its credits unlocks that (locked) CV once paid. */
@@ -134,7 +134,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     const payment = await this.prisma.payment.create({
       data: { userId: user.id, plan: req.pack, period: "one_time", amount, cvDocumentId: req.cvId ?? null },
     });
-    return this.startCheckout(payment, `Moxie Jobs ${CV_PACK_CONTENTS[req.pack].name} CV pack`);
+    return this.startCheckout(payment, `Meklit Jobs ${CV_PACK_CONTENTS[req.pack].name} CV pack`);
   }
 
   private async startCheckout(payment: Payment, reason: string): Promise<CheckoutResponse> {

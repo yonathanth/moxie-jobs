@@ -3,7 +3,28 @@ import { autoRetry } from "@grammyjs/auto-retry";
 import { Bot, GrammyError, HttpError, InputFile, type Context } from "grammy";
 import type { User } from "@ethio/db";
 import { ENV, type Env } from "../config/config.module";
-import { applyHowText, applyTarget, employerLabel, isPremiumJob } from "@ethio/shared";
+import {
+  MOMENT_IMAGES,
+  PLAN_NAME,
+  applyHowText,
+  applyTarget,
+  buildCard,
+  capPromo,
+  cvPromo,
+  employerLabel,
+  isPremiumJob,
+  locationText,
+  packsPromo,
+  premiumPromo,
+  renewPromo,
+  resolveCvPackPrices,
+  resolveLimits,
+  resolvePrices,
+  setupReminderText,
+  upgradePromo,
+  type BotPhotoMessage,
+} from "@ethio/shared";
+import { SettingsService } from "../settings/settings.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 import * as M from "./bot.messages";
@@ -20,6 +41,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(ENV) private readonly env: Env,
     private readonly users: UsersService,
     private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
   ) {
     this.bot = new Bot(env.TELEGRAM_BOT_TOKEN);
     // Retries on 429 (flood wait) and 5xx with Telegram's suggested delay.
@@ -100,7 +122,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
         reply_markup: {
           inline_keyboard: [
             [{ text: "View job", url: `${bot}?startapp=job_${share.jobId}` }],
-            [{ text: "Get free job alerts", url: `${bot}?start=src_share` }],
+            [{ text: "Get jobs that fit you", url: `${bot}?start=src_share` }],
           ],
         },
       },
@@ -134,16 +156,120 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   sendPlanActivated(user: User, planName: string, until: Date, limits: { premiumJobs: boolean; dailyJobCap: number | null }) {
-    return this.send(user, M.planActivated(planName, until, this.env.WEB_APP_URL, limits));
+    const plan = planName === PLAN_NAME.career ? "career" : "pro";
+    return this.sendPhoto(user.telegramId, MOMENT_IMAGES.plan(plan, until), M.planActivated(planName, until, this.env.WEB_APP_URL, limits));
   }
 
   sendPreferencesSaved(user: User, firstTime: boolean) {
-    return this.send(user, M.preferencesSaved(firstTime, this.env.WEB_APP_URL));
+    const reply = M.preferencesSaved(firstTime, this.env.WEB_APP_URL);
+    return firstTime ? this.sendPhoto(user.telegramId, MOMENT_IMAGES.allSet, reply) : this.send(user, reply);
+  }
+
+  /** A marketing message's caption with its Mini App buttons (they need https; `web` overrides the base). */
+  promoReply(m: BotPhotoMessage, web = this.env.WEB_APP_URL): M.Reply {
+    return { text: m.caption, reply_markup: M.keyboard(...m.buttons.map((row) => row.map((b) => M.webAppButton(b.text, web, b.path)))) };
+  }
+
+  /** Telegram's id for a picture already uploaded, by its web path (identical cards aren't uploaded twice). */
+  private readonly fileIds = new Map<string, string>();
+
+  /**
+   * A picture message: the card is drawn by the web app at `imagePath` and uploaded (works in local dev too).
+   * If the picture can't be made, the text goes on its own. Returns false if not delivered.
+   */
+  async sendPhoto(chatId: bigint | number, imagePath: string, reply: M.Reply): Promise<boolean> {
+    if (!this.enabled) return false;
+    const chat = Number(chatId);
+    try {
+      let photo: string | InputFile | undefined = this.fileIds.get(imagePath);
+      if (!photo) {
+        const res = await fetch(new URL(imagePath, this.env.WEB_APP_URL), { signal: AbortSignal.timeout(20_000) });
+        if (!res.ok) throw new Error(`card ${imagePath} → ${res.status}`);
+        photo = new InputFile(Buffer.from(await res.arrayBuffer()), "card.jpg");
+      }
+      const msg = await this.bot.api.sendPhoto(chat, photo, { caption: reply.text, parse_mode: "HTML", reply_markup: reply.reply_markup });
+      const id = msg.photo.at(-1)?.file_id;
+      if (id) this.fileIds.set(imagePath, id);
+      return true;
+    } catch (err) {
+      if (err instanceof GrammyError && err.error_code === 403) {
+        await this.users.markBotBlocked(BigInt(chat), true);
+        return false;
+      }
+      this.logger.warn(`photo ${imagePath} not sent, sending text: ${String(err)}`);
+      await this.bot.api.sendMessage(chat, reply.text, { parse_mode: "HTML", reply_markup: reply.reply_markup, link_preview_options: { is_disabled: true } });
+      return true;
+    }
+  }
+
+  /**
+   * Admins only (/preview): one of every message the bot sends with a picture, plus a job alert,
+   * so they can be checked in Telegram. Real data where it helps (a recent job, a premium job).
+   */
+  async sendPreview(chat: number, first: string | null) {
+    // Buttons need https; in local dev they point at the live site so the layout still shows.
+    const web = this.env.WEB_APP_URL.startsWith("https://") ? this.env.WEB_APP_URL : "https://jobs.gomoxie.app";
+    const settings = await this.settings.get();
+    const [job, premium] = await Promise.all([
+      this.prisma.job.findFirst({ where: { status: "active", employerType: { notIn: ["ngo", "un_agency", "embassy", "international_org", "foreign_company"] }, isOverseas: false }, orderBy: { firstSeenAt: "desc" } }),
+      this.prisma.job.findFirst({ where: { status: "active", employerType: { in: ["ngo", "un_agency", "embassy", "international_org"] } }, orderBy: { firstSeenAt: "desc" } }),
+    ]);
+    const photo = (m: BotPhotoMessage) => this.promoReply(m, web);
+    const label = (n: number, what: string, when: string) =>
+      this.bot.api.sendMessage(chat, `<b>${n}. ${M.escapeHtml(what)}</b>\n<i>${M.escapeHtml(when)}</i>`, { parse_mode: "HTML" });
+    const until = new Date(Date.now() + 30 * 24 * 3_600_000);
+    const soon = new Date(Date.now() + 2 * 24 * 3_600_000);
+    const freeCap = resolveLimits("free", settings).dailyJobCap ?? 10;
+
+    await this.bot.api.sendMessage(
+      chat,
+      "<b>Message preview</b>\nEvery message the bot sends with a picture, plus a job alert. Buttons open the live Mini App.",
+      { parse_mode: "HTML" },
+    );
+    let n = 0;
+    await label(++n, "Welcome", "First /start");
+    await this.sendPhoto(chat, MOMENT_IMAGES.welcome, M.welcomeNew(first, web));
+    await label(++n, "Setup reminder", "Once, an hour+ after joining without finishing setup");
+    await this.sendPhoto(chat, MOMENT_IMAGES.setup, { text: setupReminderText(first), reply_markup: M.keyboard([M.webAppButton("Set up my job alerts", web, "/app/onboarding")]) });
+    await label(++n, "You're all set", "After saving preferences the first time");
+    await this.sendPhoto(chat, MOMENT_IMAGES.allSet, M.preferencesSaved(true, web));
+    if (job) {
+      await label(++n, "Job alert", "Every matching job (no picture, no how to apply)");
+      const card = buildCard(job, { sourceTitle: "Example channel", deliveryId: "preview", webAppUrl: web });
+      await this.bot.api.sendMessage(chat, card.text, { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: card.buttons as never } });
+      await label(++n, "Shared job", "Someone opens a shared job link");
+      await this.sendPhoto(chat, MOMENT_IMAGES.job(job.id), M.sharedJob({ id: job.id, title: job.title, company: job.company, closed: false }, web, false));
+    }
+    await label(++n, "Plan activated", "After paying for Pro or Career");
+    await this.sendPhoto(chat, MOMENT_IMAGES.plan("pro", until), M.planActivated(PLAN_NAME.pro, until, web, resolveLimits("pro", settings)));
+    await label(++n, "A · Upgrade", "Marketing slot (12:30 / 19:00), free users, takes turns");
+    await this.sendPhoto(chat, upgradePromo(resolvePrices(settings).pro.month).image, photo(upgradePromo(resolvePrices(settings).pro.month)));
+    await label(++n, "B1 · Make and tailor a CV", "Marketing slot, free users who still have their free CVs");
+    await this.sendPhoto(chat, cvPromo().image, photo(cvPromo()));
+    const packs = packsPromo(resolveCvPackPrices(settings));
+    await label(++n, "B2 · CV packs", "Marketing slot, anyone out of CVs (free or paid)");
+    await this.sendPhoto(chat, packs.image, photo(packs));
+    const cap = capPromo(4, freeCap);
+    await label(++n, "C · Alert limit reached", "Marketing slot, free users held back by the daily limit today");
+    await this.sendPhoto(chat, cap.image, photo(cap));
+    if (premium) {
+      const d = premiumPromo({ id: premium.id, title: premium.title, kind: employerLabel(premium.employerType) ?? (premium.isOverseas ? "Abroad" : null), location: locationText(premium), deadline: premium.deadline });
+      await label(++n, "D · Premium match", "Marketing slot, free users, when a premium job matched (employer hidden)");
+      await this.sendPhoto(chat, d.image, photo(d));
+    }
+    const renew = renewPromo("pro", soon, false);
+    await label(++n, "Renewal reminder", "Paid users, 2 days before the plan ends");
+    await this.sendPhoto(chat, renew.image, photo(renew));
+    const ended = renewPromo("pro", new Date(), true);
+    await label(++n, "Plan ended", "Once, the day a paid plan ends");
+    await this.sendPhoto(chat, ended.image, photo(ended));
   }
 
   private async configureProfile() {
     try {
       await this.bot.api.setMyCommands(M.BOT_COMMANDS);
+      await this.bot.api.setMyDescription(M.BOT_DESCRIPTION);
+      await this.bot.api.setMyShortDescription(M.BOT_SHORT_DESCRIPTION);
       if (this.env.WEB_APP_URL.startsWith("https://")) {
         await this.bot.api.setChatMenuButton({
           menu_button: { type: "web_app", text: "Jobs", web_app: { url: new URL("/app/jobs", this.env.WEB_APP_URL).toString() } },
@@ -175,15 +301,23 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
           const closed = job.status === "expired" || (job.deadline !== null && job.deadline <= new Date());
           // Premium jobs (NGO, UN, embassy, abroad) show the kind of employer, never the name: Pro unlocks it in the app.
           const who = isPremiumJob(job) ? (employerLabel(job.employerType) ?? (job.isOverseas ? "Abroad" : null)) : job.company;
-          await reply(ctx, M.sharedJob({ id: job.id, title: job.title, company: who, closed }, url(), !!existing?.onboardedAt));
+          await this.sendPhoto(ctx.chat.id, MOMENT_IMAGES.job(job.id), M.sharedJob({ id: job.id, title: job.title, company: who, closed }, url(), !!existing?.onboardedAt));
           return;
         }
       }
       if (existing?.onboardedAt) {
         await reply(ctx, M.welcomeBack(user.firstName, url(), user.alertsPaused));
       } else {
-        await reply(ctx, M.welcomeNew(user.firstName, url()));
+        await this.sendPhoto(ctx.chat.id, MOMENT_IMAGES.welcome, M.welcomeNew(user.firstName, url()));
       }
+    });
+
+    pm.command("preview", async (ctx) => {
+      if (!this.env.ADMIN_TELEGRAM_IDS.includes(String(ctx.from.id))) return reply(ctx, { text: M.FALLBACK_TEXT });
+      await this.sendPreview(ctx.chat.id, ctx.from.first_name ?? null).catch((err: unknown) => {
+        this.logger.warn(`preview failed: ${String(err)}`);
+        return ctx.reply(`Preview stopped: ${String(err).slice(0, 300)}`);
+      });
     });
 
     pm.command("settings", async (ctx) => {

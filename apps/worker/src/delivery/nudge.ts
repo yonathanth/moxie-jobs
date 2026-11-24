@@ -1,7 +1,8 @@
 import { prisma } from "../db";
 import { env } from "../env";
 import { log } from "../log";
-import { BotBlockedError, sendMessage } from "./bot-api";
+import { MOMENT_IMAGES, setupReminderText } from "@ethio/shared";
+import { BotBlockedError, sendPhoto } from "./bot-api";
 import { loadSettings } from "./matcher";
 import { sendTimeAfterQuiet } from "./schedule";
 
@@ -15,17 +16,7 @@ const CHECK_MS = 10 * 60_000;
 const WAIT_MS = 60 * 60_000;
 const MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 
-/** Reminder text. Pure. */
-export function nudgeText(firstName: string | null): string {
-  const name = firstName ? `, ${firstName.replace(/[<>&]/g, "")}` : "";
-  return [
-    `<b>Your job alerts aren't set up yet${name}</b>`,
-    "",
-    "Tell me your profession and where you want to work, and I'll send you matching jobs the moment they're posted.",
-    "",
-    "It takes about a minute.",
-  ].join("\n");
-}
+export { setupReminderText as nudgeText } from "@ethio/shared";
 
 export class OnboardingNudge {
   private timer: NodeJS.Timeout | null = null;
@@ -67,7 +58,7 @@ export class OnboardingNudge {
         const claimed = await prisma.user.updateMany({ where: { id: user.id, onboardingNudgedAt: null }, data: { onboardingNudgedAt: now } });
         if (!claimed.count) continue;
         try {
-          await sendMessage(user.telegramId, nudgeText(user.firstName), { buttons: button });
+          await sendPhoto(user.telegramId, MOMENT_IMAGES.setup, setupReminderText(user.firstName), { buttons: button });
           sent++;
         } catch (err) {
           if (err instanceof BotBlockedError) await prisma.user.update({ where: { id: user.id }, data: { botBlockedAt: new Date() } });

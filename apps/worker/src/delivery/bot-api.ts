@@ -66,3 +66,52 @@ export async function sendMessage(chatId: bigint, text: string, opts: SendOption
     throw err;
   }
 }
+
+/** Telegram's id for a picture already uploaded, by its web path: identical cards aren't uploaded twice. */
+const fileIds = new Map<string, string>();
+
+async function callMultipart<T>(method: string, form: FormData, attempt = 0): Promise<T> {
+  await pace();
+  const res = await fetch(`https://api.telegram.org/bot${env().TELEGRAM_BOT_TOKEN}/${method}`, { method: "POST", body: form, signal: AbortSignal.timeout(30_000) });
+  const data = (await res.json()) as BotResponse<T>;
+  if (data.ok) return data.result as T;
+  if (data.error_code === 429 && attempt < 3) {
+    await new Promise((r) => setTimeout(r, ((data.parameters?.retry_after ?? 1) + 0.5) * 1000));
+    return callMultipart(method, form, attempt + 1);
+  }
+  if (data.error_code === 403) throw new BotBlockedError(data.description ?? "bot blocked");
+  throw new Error(`Telegram ${method} failed (${data.error_code}): ${data.description}`);
+}
+
+/**
+ * A picture message: the card is drawn by the web app at `imagePath` (e.g. "/og/msg/upgrade?price=199")
+ * and uploaded (so it works in local dev too). If the picture can't be made, the caption goes as text.
+ */
+export async function sendPhoto(chatId: bigint, imagePath: string, caption: string, opts: SendOptions = {}): Promise<number> {
+  const markup = opts.buttons?.length ? JSON.stringify({ inline_keyboard: opts.buttons }) : null;
+  const known = fileIds.get(imagePath);
+  try {
+    let form = new FormData();
+    if (known) form.set("photo", known);
+    else {
+      const img = await fetch(new URL(imagePath, env().WEB_APP_URL), { signal: AbortSignal.timeout(20_000) });
+      if (!img.ok) throw new Error(`card ${imagePath} → ${img.status}`);
+      form.set("photo", new Blob([await img.arrayBuffer()], { type: "image/jpeg" }), "card.jpg");
+    }
+    const fill = (f: FormData) => {
+      f.set("chat_id", chatId.toString());
+      f.set("caption", caption);
+      f.set("parse_mode", "HTML");
+      if (markup) f.set("reply_markup", markup);
+      return f;
+    };
+    form = fill(form);
+    const msg = await callMultipart<{ message_id: number; photo?: { file_id: string }[] }>("sendPhoto", form);
+    const id = msg.photo?.at(-1)?.file_id;
+    if (id) fileIds.set(imagePath, id);
+    return msg.message_id;
+  } catch (err) {
+    if (err instanceof BotBlockedError) throw err;
+    return sendMessage(chatId, caption, opts);
+  }
+}

@@ -11,7 +11,7 @@ export function createTelegramClient(session = env().TG_SESSION): TelegramClient
     retryDelay: 2_000,
     autoReconnect: true,
     floodSleepThreshold: 120, // auto-sleep on FLOOD_WAIT up to 2 minutes
-    deviceModel: "GoMoxie Jobs Listener",
+    deviceModel: "Meklit Jobs Listener",
     appVersion: "1.0",
   });
   client.setLogLevel(LogLevel.ERROR);

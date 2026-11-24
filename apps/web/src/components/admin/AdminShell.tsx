@@ -15,7 +15,7 @@ export function AdminShell({ title, subtitle, back = "/app/admin", children }: {
 
   if (!me.isAdmin) {
     return (
-      <CenteredMessage icon={<ShieldAlert className="size-10 text-hint-light" />} title="Admins only" body="This part of the app is for the GoMoxie Jobs team.">
+      <CenteredMessage icon={<ShieldAlert className="size-10 text-hint-light" />} title="Admins only" body="This part of the app is for the Meklit Jobs team.">
         <Button onClick={() => router.push("/app")}>Back to my jobs</Button>
       </CenteredMessage>
     );
