@@ -94,7 +94,7 @@ export const BOT_DESCRIPTION =
   "Tap Start to set up your job preferences. It takes less than a minute.";
 
 /** On the bot's profile and when it's shared. Max 120 characters. */
-export const BOT_SHORT_DESCRIPTION = "Jobs in Ethiopia that fit you, sent the moment they're posted. Plus a CV for every job.";
+export const BOT_SHORT_DESCRIPTION = "Jobs in Ethiopia that fit you, sent the moment they're posted. Create, improve and tailor your CV for every job.";
 
 export const PAUSED_TEXT = "Job alerts paused. Send /resume whenever you want them back.";
 export const RESUMED_TEXT = "Job alerts are back on.";
