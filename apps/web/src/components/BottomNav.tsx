@@ -33,24 +33,23 @@ export function BottomNav() {
   if (!mounted || !me.onboarded || !SHOWN_ON.has(path)) return null;
 
   return createPortal(
-    // A floating dock: the current tab is a dark pill with its name; the others are just their icon.
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(12px,env(safe-area-inset-bottom))]">
-      <ul className="pointer-events-auto mx-auto flex max-w-md items-center justify-between gap-1 rounded-full border border-separator bg-surface/95 p-1.5 shadow-[0_16px_40px_-14px_rgba(15,17,21,0.35)] backdrop-blur">
+    // The current tab (icon and name) sits in a soft rounded box; the others are plain.
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-separator bg-bg/90 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+      <ul className="mx-auto flex max-w-lg gap-1 px-2 py-1.5">
         {ITEMS.map(({ href, label, icon: Icon, match }) => {
           const active = match(path);
           return (
-            <li key={href} className={active ? "shrink-0" : "flex-1"}>
+            <li key={href} className="flex-1">
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                aria-label={label}
                 className={clsx(
-                  "flex h-12 items-center justify-center gap-2 rounded-full transition-all duration-200",
-                  active ? "bg-ink px-5 text-white shadow-[0_6px_16px_-8px_rgba(15,17,21,0.6)]" : "text-hint hover:bg-pill hover:text-text active:bg-pill",
+                  "flex flex-col items-center gap-0.5 rounded-2xl py-1.5 text-[11px] font-semibold transition-colors",
+                  active ? "bg-pill text-ink" : "text-hint hover:text-text active:bg-pill/60",
                 )}
               >
-                <Icon className="size-[22px] shrink-0" strokeWidth={active ? 2.3 : 2} />
-                {active && <span className="text-[14px] font-semibold">{label}</span>}
+                <Icon className="size-[22px]" strokeWidth={active ? 2.3 : 2} />
+                {label}
               </Link>
             </li>
           );
