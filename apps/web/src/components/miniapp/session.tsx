@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { RouteSkeleton, ScreenSkeleton } from "../skeletons";
+import { RouteSkeleton, ScreenSkeleton, skeletonFor } from "../skeletons";
 import { DEFAULT_PLAN_LIMITS, type MeDto } from "@ethio/shared";
 import { api, ApiError } from "@/lib/api";
 import { BOT_URL, DEV_AUTH, DEV_TELEGRAM_ID } from "@/lib/config";
@@ -117,17 +117,19 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
   // A startapp link (shared job) opens the Mini App at its home; go to that job once, on launch.
   const router = useRouter();
   const pathname = usePathname();
-  const [startTarget] = useState(() => (startHandled ? null : startRoute()));
+  // Used once: cleared after the first redirect, so coming back to /app later (Profile) stays on Profile.
+  const [startTarget, setStartTarget] = useState(() => (startHandled ? null : startRoute()));
   const goStart = !!startTarget && startTarget !== "/app" && (pathname === "/app" || pathname === "/app/");
   useEffect(() => {
     if (state.status !== "ready" || !startTarget) return;
     startHandled = true;
     if (goStart) router.replace(startTarget);
+    setStartTarget(null);
   }, [state.status, startTarget, goStart, router]);
 
   switch (state.status) {
     case "loading":
-      return goStart ? <ScreenSkeleton variant="detail" /> : <RouteSkeleton />;
+      return goStart ? <ScreenSkeleton variant={skeletonFor((startTarget ?? "").split("?")[0] ?? "")} /> : <RouteSkeleton />;
     case "outside-telegram":
       return (
         <CenteredMessage title="Open this in Telegram" body="Meklit Jobs runs inside Telegram. Open the bot to continue.">
@@ -146,7 +148,7 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
         </CenteredMessage>
       );
     case "ready":
-      if (goStart && !startHandled) return <ScreenSkeleton variant="detail" />;
+      if (goStart && !startHandled) return <ScreenSkeleton variant={skeletonFor((startTarget ?? "").split("?")[0] ?? "")} />;
       return (
         <SessionContext.Provider value={{ token: state.token, me: devView(state.me), setMe }}>{children}</SessionContext.Provider>
       );
