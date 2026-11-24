@@ -1,5 +1,5 @@
-import type { JobCardDto } from "@ethio/shared";
-import { APP_NAME, miniAppJobLink } from "./config";
+import { SHARE_APP_MESSAGES, type JobCardDto, type ShareAppKind } from "@ethio/shared";
+import { APP_NAME, BOT_URL, miniAppJobLink } from "./config";
 import { api } from "./api";
 import { getWebApp } from "./telegram";
 
@@ -50,6 +50,35 @@ export async function shareJob(job: ShareableJob, token?: string): Promise<"shar
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return "shared"; // they closed the sheet
     }
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    return "copied";
+  } catch {
+    return "failed";
+  }
+}
+
+/**
+ * "Share Meklit Jobs": in Telegram 8.0+, a picture message about one thing the app does (its button opens that
+ * place in the Mini App). Otherwise the bot link with a line of text.
+ */
+export async function shareApp(kind: ShareAppKind, token: string): Promise<"shared" | "copied" | "failed"> {
+  const wa = getWebApp();
+  if (wa?.shareMessage && wa.isVersionAtLeast?.("8.0")) {
+    try {
+      const { id } = await api.prepareAppShare(token, kind);
+      wa.shareMessage(id);
+      return "shared";
+    } catch {
+      // falls back to the link
+    }
+  }
+  const url = `${BOT_URL}?startapp=${kind}`;
+  const text = SHARE_APP_MESSAGES[kind].caption.replace(/<[^>]+>/g, "").split("\n")[0] ?? APP_NAME;
+  if (wa) {
+    wa.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
+    return "shared";
   }
   try {
     await navigator.clipboard.writeText(`${text}\n${url}`);

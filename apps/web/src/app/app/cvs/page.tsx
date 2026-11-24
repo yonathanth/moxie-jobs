@@ -4,7 +4,7 @@ import { RowsSkeleton } from "@/components/skeletons";
 import { ArrowRight, ChevronRight, FilePlus2, FileText, Gauge, Lock, Target, Upload, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NewCvModal } from "@/components/cv/NewCvModal";
 import { haptic } from "@/lib/telegram";
 import type { CvQuotaDto, CvSummaryDto } from "@ethio/shared";
@@ -16,6 +16,15 @@ export default function CvsPage() {
   const list = useCvList();
   const router = useRouter();
   const [flow, setFlow] = useState<"create" | "improve" | null>(null);
+  // A share link (?new=create|improve) opens the matching flow once the list (its quota) is in.
+  useEffect(() => {
+    if (!list.data) return;
+    const want = new URLSearchParams(window.location.search).get("new");
+    if (want === "create" || want === "improve") {
+      setFlow(want);
+      router.replace("/app/cvs");
+    }
+  }, [list.data, router]);
   // The modal needs the quota (what it costs); before the list loads, the page version works the same.
   const start = (f: "create" | "improve") => {
     haptic.select();

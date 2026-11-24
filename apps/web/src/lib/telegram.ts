@@ -1,3 +1,4 @@
+import { START_APP_ROUTES } from "@ethio/shared";
 /** Minimal typings for the parts of Telegram's WebApp API we use. */
 export interface TelegramWebApp {
   initData: string;
@@ -86,7 +87,8 @@ export function startRoute(): string | null {
     if (!param && initData) param = new URLSearchParams(initData).get("start_param");
   } catch {}
   const job = /^job_([0-9a-f-]{36})$/i.exec(param ?? "");
-  return job ? `/app/jobs/${job[1]}` : null;
+  if (job) return `/app/jobs/${job[1]}`;
+  return param && param in START_APP_ROUTES ? START_APP_ROUTES[param as keyof typeof START_APP_ROUTES] : null;
 }
 
 /** The Telegram user id inside initData (unverified: only used to pick a cached session). */

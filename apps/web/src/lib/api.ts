@@ -34,6 +34,7 @@ import type {
   BroadcastAudience,
   BroadcastRequest,
   BroadcastResult,
+  ShareAppKind,
 } from "@ethio/shared";
 import { API_URL } from "./config";
 
@@ -80,6 +81,7 @@ export const api = {
   resolveTerm: (token: string, body: ResolveTermRequest) =>
     request<ResolveTermResponse>("/taxonomy/resolve", { method: "POST", token, body: JSON.stringify(body) }),
   me: (token: string) => request<MeDto>("/me", { token }),
+  prepareAppShare: (token: string, kind: ShareAppKind) => request<{ id: string }>("/share/app", { method: "POST", token, body: JSON.stringify({ kind }) }),
   prepareJobShare: (token: string, jobId: string) => request<{ id: string }>(`/jobs/${jobId}/share`, { method: "POST", token }),
   setCvContact: (token: string, body: CvContact) => request<MeDto>("/me/cv-contact", { method: "PUT", token, body: JSON.stringify(body) }),
   updateMe: (token: string, body: { alertsPaused: boolean }) =>

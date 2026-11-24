@@ -118,7 +118,7 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
   const router = useRouter();
   const pathname = usePathname();
   const [startTarget] = useState(() => (startHandled ? null : startRoute()));
-  const goStart = !!startTarget && (pathname === "/app" || pathname === "/app/");
+  const goStart = !!startTarget && startTarget !== "/app" && (pathname === "/app" || pathname === "/app/");
   useEffect(() => {
     if (state.status !== "ready" || !startTarget) return;
     startHandled = true;

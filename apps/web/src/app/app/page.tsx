@@ -12,6 +12,7 @@ import { useSession } from "@/components/miniapp/session";
 import { Badge, Button, Card, cx, IconTile, PageHeader, Screen, Section, Sheet, Toast, Toggle, useToast } from "@/components/ui";
 import { haptic } from "@/lib/telegram";
 import { ContactForm } from "@/components/cv/ContactForm";
+import { ShareAppCard } from "@/components/ShareAppCard";
 import { formatDate } from "@/lib/plans";
 
 /** Mini App home: plan, today's alerts, locked premium matches, what we match on. */
@@ -56,6 +57,7 @@ export default function MiniAppHome() {
 
       <CvDetails me={me} />
       <PlanCard me={me} />
+      <ShareAppCard />
 
       <Section title="Alerts">
         <Toggle

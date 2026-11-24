@@ -135,3 +135,53 @@ export function setupReminderText(firstName: string | null): string {
   ].join("\n");
 }
 
+
+/** "Share Meklit Jobs" (Profile): one message per purpose, each a picture with a button into the right place. */
+export const SHARE_APP_KINDS = ["general", "jobs", "cv_create", "cv_improve", "premium"] as const;
+export type ShareAppKind = (typeof SHARE_APP_KINDS)[number];
+
+/** Where a share's button lands in the Mini App (t.me/<bot>?startapp=<kind>; SessionGate routes it). */
+export const START_APP_ROUTES: Record<ShareAppKind, string> = {
+  general: "/app",
+  jobs: "/app/jobs?scope=for_you",
+  cv_create: "/app/cvs?new=create",
+  cv_improve: "/app/cvs?new=improve",
+  premium: "/app/jobs?scope=all&employers=ngo,international,foreign",
+};
+
+export interface ShareAppMessage {
+  image: string;
+  caption: string;
+  button: string;
+}
+
+export const SHARE_APP_MESSAGES: Record<ShareAppKind, ShareAppMessage> = {
+  general: {
+    image: "/og/msg/welcome",
+    caption:
+      "<b>Meklit Jobs: jobs in Ethiopia that fit you</b>\n\nGet matching jobs the moment they're posted, and a CV made for every job you apply to. Free on Telegram.",
+    button: "Open Meklit Jobs",
+  },
+  jobs: {
+    image: "/og/msg/jobs",
+    caption:
+      "<b>Get jobs that fit you, the moment they're posted</b>\n\nTell it the jobs you want once. Meklit Jobs checks Ethiopia's job channels and websites and sends you every match.",
+    button: "Find jobs for me",
+  },
+  cv_create: {
+    image: "/og/msg/cv",
+    caption: "<b>Make a strong CV in minutes</b>\n\nTell it about your work in plain words, in English or Amharic, and get a professional CV. Your first one is free.",
+    button: "Make my CV",
+  },
+  cv_improve: {
+    image: "/og/msg/improve",
+    caption: "<b>Make your CV stand out</b>\n\nUpload your CV and get a stronger version in minutes, then tailor it to any job in one tap.",
+    button: "Improve my CV",
+  },
+  premium: {
+    image: "/og/msg/intl",
+    caption:
+      "<b>NGO, UN, embassy and international jobs</b>\n\nGet them the moment they're posted, matched to you, from Ethiopia's job channels and websites.",
+    button: "See these jobs",
+  },
+};

@@ -23,6 +23,8 @@ import {
   setupReminderText,
   upgradePromo,
   type BotPhotoMessage,
+  SHARE_APP_MESSAGES,
+  type ShareAppKind,
 } from "@ethio/shared";
 import { SettingsService } from "../settings/settings.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -108,23 +110,46 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
    */
   async prepareJobShare(user: Pick<User, "telegramId">, share: { jobId: string; imageUrl: string; caption: string }): Promise<string> {
     const bot = `https://t.me/${this.env.TELEGRAM_BOT_USERNAME}`;
+    return this.preparePhotoShare(user, {
+      id: share.jobId,
+      imageUrl: share.imageUrl,
+      caption: share.caption,
+      buttons: [
+        [{ text: "View job", url: `${bot}?startapp=job_${share.jobId}` }],
+        [{ text: "Get jobs that fit you", url: `${bot}?start=src_share` }],
+      ],
+    });
+  }
+
+  /** "Share Meklit Jobs": a picture about one thing the app does, its button opening that place in the Mini App. */
+  async prepareAppShare(user: Pick<User, "telegramId">, kind: ShareAppKind): Promise<string> {
+    const m = SHARE_APP_MESSAGES[kind];
+    const bot = `https://t.me/${this.env.TELEGRAM_BOT_USERNAME}`;
+    return this.preparePhotoShare(user, {
+      id: `app${kind}`,
+      imageUrl: new URL(m.image, this.env.WEB_APP_URL).toString(),
+      caption: m.caption,
+      buttons: [[{ text: m.button, url: `${bot}?startapp=${kind}` }]],
+    });
+  }
+
+  /** A photo message the user can send to any chat (WebApp.shareMessage). Returns the prepared message id. */
+  private async preparePhotoShare(
+    user: Pick<User, "telegramId">,
+    share: { id: string; imageUrl: string; caption: string; buttons: { text: string; url: string }[][] },
+  ): Promise<string> {
     const prepared = await this.bot.api.savePreparedInlineMessage(
       Number(user.telegramId),
       {
         type: "photo",
-        id: share.jobId.replace(/-/g, "").slice(0, 32),
+        id: share.id.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 32),
         photo_url: share.imageUrl,
         thumbnail_url: share.imageUrl,
         photo_width: 1200,
         photo_height: 630,
         caption: share.caption,
         parse_mode: "HTML",
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "View job", url: `${bot}?startapp=job_${share.jobId}` }],
-            [{ text: "Get jobs that fit you", url: `${bot}?start=src_share` }],
-          ],
-        },
+        reply_markup: { inline_keyboard: share.buttons },
       },
       { allow_user_chats: true, allow_group_chats: true, allow_channel_chats: true },
     );

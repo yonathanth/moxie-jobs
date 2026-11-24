@@ -222,6 +222,45 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
       );
     }
 
+    // "Share Meklit Jobs" pictures (jobs, improve, international); general and create reuse welcome and cv.
+    case "jobs":
+      return cardResponse(
+        <Frame footer={{ note: "Free on Telegram", cta: "Find jobs for me" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <Headline size={58} max={560}>Jobs that fit you, sent the moment they&apos;re posted</Headline>
+              <Sub max={540}>From Ethiopia&apos;s job channels and websites, all in one place.</Sub>
+            </div>
+            <SampleAlert />
+          </div>
+        </Frame>,
+      );
+
+    case "improve":
+      return cardResponse(
+        <Frame footer={{ note: "Then tailor it to any job in one tap", cta: "Improve my CV" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <Headline size={62} max={600}>Make your CV stand out</Headline>
+              <Sub max={580}>Upload your CV and get a stronger version in minutes.</Sub>
+            </div>
+            <CvSheet stamp="Improved" />
+          </div>
+        </Frame>,
+      );
+
+    case "intl":
+      return cardResponse(
+        <Frame badge={{ text: "Premium jobs" }} footer={{ note: "Matched to you, the moment they're posted", cta: "See these jobs" }}>
+          <Headline size={62} max={960}>NGO, UN, embassy and international jobs</Headline>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 34, maxWidth: 1000 }}>
+            {["NGOs", "UN agencies", "Embassies", "International companies", "Jobs abroad"].map((c) => (
+              <Chip key={c}>{c}</Chip>
+            ))}
+          </div>
+        </Frame>,
+      );
+
     // BotFather: the picture above the description, before /start (640×360).
     case "intro":
       return cardResponse(
@@ -283,7 +322,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
 }
 
 /** A CV sheet with a "tailored" stamp, for the CV card. */
-function CvSheet() {
+function CvSheet({ stamp = "Made for this job" }: { stamp?: string }) {
   return (
     <div style={{ display: "flex", position: "relative", width: 300, height: 380, marginRight: 20 }}>
       <div
@@ -322,7 +361,7 @@ function CvSheet() {
           fontWeight: 700,
         }}
       >
-        Made for this job
+        {stamp}
       </div>
     </div>
   );
