@@ -29,11 +29,13 @@ export interface CardContext {
 }
 
 export function toCard(job: Job, ctx: CardContext): JobCardDto {
-  const locked = isPremiumJob(job) && !ctx.premiumJobs;
+  const premium = isPremiumJob(job);
+  const locked = premium && !ctx.premiumJobs;
   const base = {
     id: job.id,
     title: job.title,
     locked,
+    premium,
     match: ctx.match,
     saved: ctx.saved ?? false,
     functionId: job.functionId,

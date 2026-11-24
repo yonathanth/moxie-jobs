@@ -1,5 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+
 import clsx from "clsx";
 import { Check, CheckCircle2, Clock, Crown, Lock, ShieldCheck, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -274,12 +276,14 @@ function Waiting({ payment, onDone }: { payment: { id: string; url: string; plan
   const router = useRouter();
   const status = usePayment(payment.id);
   const refresh = useRefreshMe();
+  const queryClient = useQueryClient();
   const state = status.data?.status ?? "pending";
 
   useEffect(() => {
     if (state === "paid") {
       haptic.success();
-      refresh.mutate();
+      // New plan or credits: refresh everything (CVs it unlocked, the feed, limits).
+      refresh.mutate(undefined, { onSettled: () => void queryClient.invalidateQueries() });
     } else if (state === "failed" || state === "cancelled") {
       haptic.error();
     }

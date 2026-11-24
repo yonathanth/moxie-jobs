@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PLAN_LIMITS } from "@ethio/shared";
-import { allowanceLeft, cvAsText, cvTitle, decideCharge, jobDescriptionFor, toPlainContent, type ChargeInput } from "../src/cv/cv.rules";
+import { allowanceLeft, cvAsText, cvTitle, decideCharge, jobDescriptionFor, planUnlocks, toPlainContent, type ChargeInput } from "../src/cv/cv.rules";
 
 const base: ChargeInput = {
   flow: "create",
@@ -84,5 +84,27 @@ describe("toPlainContent", () => {
     expect(out.experience?.[0]?.bullets).toEqual(["Did reconciliations", "Impact: Closed books 4 days faster", "kept as is"]);
     expect(out.skills).toEqual(["Excel", "IFRS"]);
     expect("skillGroups" in out).toBe(false);
+  });
+});
+
+describe("planUnlocks (locked CVs a plan covers after upgrading)", () => {
+  const pro = { cvNewPerMonth: 2, cvTailorPerMonth: 1 };
+  const locked = [
+    { id: "a", product: "cv_new" },
+    { id: "b", product: "cv_tailor" },
+    { id: "c", product: "cv_new" },
+    { id: "d", product: "cv_tailor" },
+    { id: "e", product: "cv_new" },
+  ];
+  it("unlocks newest first, up to each kind's allowance", () => {
+    expect(planUnlocks(locked, pro, { new: 0, tailor: 0 })).toEqual(["a", "b", "c"]);
+  });
+  it("counts what the month already used", () => {
+    expect(planUnlocks(locked, pro, { new: 1, tailor: 1 })).toEqual(["a"]);
+    expect(planUnlocks(locked, pro, { new: 2, tailor: 1 })).toEqual([]);
+  });
+  it("unlocks everything on an unlimited plan, and nothing on free", () => {
+    expect(planUnlocks(locked, { cvNewPerMonth: null, cvTailorPerMonth: null }, { new: 0, tailor: 0 })).toHaveLength(5);
+    expect(planUnlocks(locked, { cvNewPerMonth: 0, cvTailorPerMonth: 0 }, { new: 0, tailor: 0 })).toEqual([]);
   });
 });

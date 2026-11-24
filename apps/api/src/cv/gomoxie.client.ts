@@ -141,7 +141,8 @@ export class GomoxieClient {
       id: t.id,
       name: t.name,
       category: t.category,
-      previewUrl: new URL(`/api/v1/templates/${encodeURIComponent(t.id)}/preview.png`, publicBase).toString(),
+      // Small WebP, pre-rendered when GoMoxie starts and cached by browsers (the big preview.png is rendered on demand).
+      previewUrl: new URL(`/api/v1/templates/${encodeURIComponent(t.id)}/thumb.webp`, publicBase).toString(),
     }));
     this.templates = { at: Date.now(), list };
     return list;

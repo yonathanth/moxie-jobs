@@ -177,3 +177,13 @@ export function sharedJob(job: { id: string; title: string; company: string | nu
     ),
   };
 }
+
+/** Caption of a shared job (the photo message sent from the Mini App's Share). Premium jobs pass the employer kind as `who`, never the name. */
+export function jobShareCaption(job: { title: string; who: string | null; location: string | null; deadline: Date | null }): string {
+  const lines = [`<b>${escapeHtml(job.title)}</b>`];
+  if (job.who) lines.push(escapeHtml(job.who));
+  const meta = [job.location, job.deadline ? `apply by ${job.deadline.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Addis_Ababa" })}` : null].filter(Boolean);
+  if (meta.length) lines.push(escapeHtml(meta.join(" · ")));
+  lines.push("", "Thought of you when I saw this. Get jobs like it on GoMoxie Jobs, free on Telegram.");
+  return lines.join("\n");
+}

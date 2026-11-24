@@ -28,6 +28,29 @@ export function allowanceLeft(perMonth: number | null, used: number): number | n
 }
 
 /**
+ * Locked CVs (made while the plan didn't cover them) that the plan's monthly
+ * allowance covers now, e.g. right after upgrading. Takes them in the order
+ * given (newest first) and stops when that kind's allowance runs out.
+ */
+export function planUnlocks(
+  locked: { id: string; product: string | null }[],
+  limits: Pick<PlanLimits, "cvNewPerMonth" | "cvTailorPerMonth">,
+  used: { new: number; tailor: number },
+): string[] {
+  const count = { ...used };
+  const out: string[] = [];
+  for (const cv of locked) {
+    const tailor = cv.product === "cv_tailor";
+    const left = tailor ? allowanceLeft(limits.cvTailorPerMonth, count.tailor) : allowanceLeft(limits.cvNewPerMonth, count.new);
+    if (left !== null && left <= 0) continue;
+    out.push(cv.id);
+    if (tailor) count.tailor += 1;
+    else count.new += 1;
+  }
+  return out;
+}
+
+/**
  * Order: the free base CV (started from a job, no CV yet) → the one free
  * tailoring → the plan's allowance → a CV pack credit → "make now, unlock later"
  * (locked), unless they already have the maximum number of unpaid CVs.

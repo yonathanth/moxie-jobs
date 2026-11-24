@@ -77,6 +77,7 @@ export const api = {
   resolveTerm: (token: string, body: ResolveTermRequest) =>
     request<ResolveTermResponse>("/taxonomy/resolve", { method: "POST", token, body: JSON.stringify(body) }),
   me: (token: string) => request<MeDto>("/me", { token }),
+  prepareJobShare: (token: string, jobId: string) => request<{ id: string }>(`/jobs/${jobId}/share`, { method: "POST", token }),
   setCvContact: (token: string, body: CvContact) => request<MeDto>("/me/cv-contact", { method: "PUT", token, body: JSON.stringify(body) }),
   updateMe: (token: string, body: { alertsPaused: boolean }) =>
     request<MeDto>("/me", { method: "PATCH", token, body: JSON.stringify(body) }),

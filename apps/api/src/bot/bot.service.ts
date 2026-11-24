@@ -3,7 +3,7 @@ import { autoRetry } from "@grammyjs/auto-retry";
 import { Bot, GrammyError, HttpError, InputFile, type Context } from "grammy";
 import type { User } from "@ethio/db";
 import { ENV, type Env } from "../config/config.module";
-import { applyHowText, applyTarget } from "@ethio/shared";
+import { applyHowText, applyTarget, employerLabel, isPremiumJob } from "@ethio/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 import * as M from "./bot.messages";
@@ -79,6 +79,36 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     }
   }
 
+  /**
+   * A job as a photo message the user can send to any chat from the Mini App
+   * (WebApp.shareMessage): the job card image, a caption and a button that opens
+   * the job straight in the Mini App. Returns the prepared message id.
+   */
+  async prepareJobShare(user: Pick<User, "telegramId">, share: { jobId: string; imageUrl: string; caption: string }): Promise<string> {
+    const bot = `https://t.me/${this.env.TELEGRAM_BOT_USERNAME}`;
+    const prepared = await this.bot.api.savePreparedInlineMessage(
+      Number(user.telegramId),
+      {
+        type: "photo",
+        id: share.jobId.replace(/-/g, "").slice(0, 32),
+        photo_url: share.imageUrl,
+        thumbnail_url: share.imageUrl,
+        photo_width: 1200,
+        photo_height: 630,
+        caption: share.caption,
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "View job", url: `${bot}?startapp=job_${share.jobId}` }],
+            [{ text: "Get free job alerts", url: `${bot}?start=src_share` }],
+          ],
+        },
+      },
+      { allow_user_chats: true, allow_group_chats: true, allow_channel_chats: true },
+    );
+    return prepared.id;
+  }
+
   /** Sends a file (e.g. a CV PDF) to the user's chat. Returns false if not delivered. */
   async sendDocument(user: Pick<User, "telegramId">, file: Buffer, filename: string, caption: string, reply?: Pick<M.Reply, "reply_markup">): Promise<boolean> {
     if (!this.enabled) return false;
@@ -139,11 +169,13 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       if (shared) {
         const job = await this.prisma.job.findUnique({
           where: { id: shared[1] },
-          select: { id: true, title: true, company: true, status: true, deadline: true },
+          select: { id: true, title: true, company: true, status: true, deadline: true, employerType: true, isOverseas: true },
         });
         if (job && job.status !== "hidden" && job.status !== "review") {
           const closed = job.status === "expired" || (job.deadline !== null && job.deadline <= new Date());
-          await reply(ctx, M.sharedJob({ id: job.id, title: job.title, company: job.company, closed }, url(), !!existing?.onboardedAt));
+          // Premium jobs (NGO, UN, embassy, abroad) show the kind of employer, never the name: Pro unlocks it in the app.
+          const who = isPremiumJob(job) ? (employerLabel(job.employerType) ?? (job.isOverseas ? "Abroad" : null)) : job.company;
+          await reply(ctx, M.sharedJob({ id: job.id, title: job.title, company: who, closed }, url(), !!existing?.onboardedAt));
           return;
         }
       }

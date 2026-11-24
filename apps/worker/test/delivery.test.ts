@@ -145,15 +145,9 @@ describe("buildCard", () => {
     ]);
   });
 
-  it("always says how to apply, linking the application page or the original post", () => {
-    expect(buildCard(job(), opts).text).toContain(
-      '<b>How to apply:</b> Follow the instructions in the <a href="https://t.me/ethiojobs_netbot?startapp=job_id_1">original post</a>.',
-    );
-    expect(buildCard(job({ applyMethod: "url", applyUrl: "https://careers.example.com/1" }), opts).text).toContain(
-      '<b>How to apply:</b> <a href="https://careers.example.com/1">Apply online</a>',
-    );
-    expect(buildCard(job(), { ...opts, publicApiUrl: "https://api.jobs.gomoxie.app" }).text).toContain('href="https://api.jobs.gomoxie.app/r/d-1"');
-    expect(buildCard(job({ sourceUrl: "telegram:ethiojobs/12" }), opts).text).toContain("Follow the instructions in the original post on Ethiojobs.");
+  it("leaves how to apply out (it is on the job page and in See details)", () => {
+    expect(buildCard(job({ applyMethod: "email", applyEmail: "hr@x.com" }), opts).text).not.toContain("How to apply");
+    expect(buildCard(job({ applyMethod: "email", applyEmail: "hr@x.com" }), opts).text).not.toContain("hr@x.com");
   });
 
   it("lists requirements", () => {
@@ -166,14 +160,6 @@ describe("buildCard", () => {
     expect(text).toContain("Kerchanshe &lt;Trading&gt; · NGO");
     expect(text).toContain("<i>Not stated: experience, education, deadline</i>\n<i>via Ethiojobs</i>");
     expect(text).not.toContain("<b>Deadline:</b>");
-  });
-
-  it("shows how to apply for email, phone and in person", () => {
-    expect(buildCard(job({ applyMethod: "email", applyEmail: "hr@x.com" }), opts).text).toContain("<b>How to apply:</b> Send your CV to hr@x.com. Details in the <a href=\"https://t.me/ethiojobs_netbot?startapp=job_id_1\">original post</a>.");
-    expect(buildCard(job({ applyMethod: "phone", applyPhone: "+251911000000" }), opts).text).toContain("<b>How to apply:</b> Call +251911000000");
-    expect(buildCard(job({ applyMethod: "in_person", applyNotes: "Bole, Getu Commercial 4th floor" }), opts).text).toContain(
-      "<b>How to apply:</b> In person: Bole, Getu Commercial 4th floor",
-    );
   });
 
   it("shows gender, abroad, hybrid and only salaries with figures", () => {

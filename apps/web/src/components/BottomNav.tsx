@@ -1,7 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { Briefcase, Crown, FileText, UserRound } from "lucide-react";
+import { Briefcase, Crown, UserRound } from "lucide-react";
+import { PaperIcon } from "./PaperIcon";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,7 +11,7 @@ import { useSession } from "./miniapp/session";
 
 const ITEMS = [
   { href: "/app/jobs", label: "Jobs", icon: Briefcase, match: (p: string) => p.startsWith("/app/jobs") },
-  { href: "/app/cvs", label: "CV", icon: FileText, match: (p: string) => p.startsWith("/app/cvs") },
+  { href: "/app/cvs", label: "CV", icon: PaperIcon, match: (p: string) => p.startsWith("/app/cvs") },
   { href: "/app/plans", label: "Plans", icon: Crown, match: (p: string) => p.startsWith("/app/plans") },
   // Profile holds the account: plan, alerts, preferences.
   { href: "/app", label: "Profile", icon: UserRound, match: (p: string) => p === "/app" || p.startsWith("/app/preferences") },

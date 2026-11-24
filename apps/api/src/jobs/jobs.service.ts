@@ -1,6 +1,9 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Job, Prisma, User } from "@ethio/db";
-import { effectivePlan, resolveLimits, type JobCardDto, type JobFeedPage, type JobFeedQuery, type PostedWithin, type PublicJobDto } from "@ethio/shared";
+import { effectivePlan, employerLabel, isPremiumJob, locationText, resolveLimits, type JobCardDto, type JobFeedPage, type JobFeedQuery, type PostedWithin, type PublicJobDto } from "@ethio/shared";
+import { BotService } from "../bot/bot.service";
+import { jobShareCaption } from "../bot/bot.messages";
+import { ENV, type Env } from "../config/config.module";
 import { PrismaService } from "../prisma/prisma.service";
 import { SettingsService } from "../settings/settings.service";
 import { decodeCursor, employerTypes, encodeCursor, pinAt, searchTerms, toCard, toPublic } from "./jobs.mapper";
@@ -29,6 +32,8 @@ export class JobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
+    private readonly bot: BotService,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   private async lookupMaps() {
@@ -195,6 +200,21 @@ export class JobsService {
   async unsave(user: User, id: string): Promise<{ saved: false }> {
     await this.prisma.savedJob.deleteMany({ where: { userId: user.id, jobId: id } });
     return { saved: false };
+  }
+
+  /** A photo message for the Mini App's Share (Telegram's chat picker). Premium jobs never name the employer. */
+  async prepareShare(user: User, id: string): Promise<{ id: string }> {
+    const job = await this.prisma.job.findUnique({ where: { id } });
+    if (!job || job.status === "hidden" || job.status === "review") throw new NotFoundException("Job not found");
+    const kind = employerLabel(job.employerType) ?? (job.isOverseas ? "Abroad" : null);
+    const caption = jobShareCaption({
+      title: job.title,
+      who: isPremiumJob(job) ? kind : (job.company ?? kind),
+      location: locationText(job),
+      deadline: job.deadline,
+    });
+    const imageUrl = new URL(`/j/${job.id}/share.jpg`, this.env.WEB_APP_URL).toString();
+    return { id: await this.bot.prepareJobShare(user, { jobId: job.id, imageUrl, caption }) };
   }
 
   /** A shared job link: public teaser, no sign-in. */

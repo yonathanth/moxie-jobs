@@ -119,6 +119,8 @@ export interface JobCardDto {
   title: string;
   /** Premium job the user's plan doesn't include: details are withheld. */
   locked: boolean;
+  /** NGO, UN/AU/embassy, foreign company or overseas: shares never name the employer. */
+  premium: boolean;
   /** Why it's in "For you": sent as an alert, held by the daily limit, or locked (premium). */
   match: "sent" | "waiting" | "locked" | null;
   /** The user bookmarked it (Saved tab). */
@@ -439,7 +441,7 @@ export interface CvGenerateRequest {
   location?: string;
   /** improve: what to focus on ("make it more senior"). */
   focus?: string;
-  /** tailor: the job, and the base CV to tailor (default: the newest base CV). */
+  /** tailor: the job, and the base CV to tailor (default: the newest base CV). improve: a saved CV to improve (instead of sourceText). */
   jobId?: string;
   baseCvId?: string;
   /** create started from "tailor this job" with no CV yet: the base CV is free. */

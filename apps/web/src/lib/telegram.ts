@@ -8,6 +8,9 @@ export interface TelegramWebApp {
   expand(): void;
   close(): void;
   openTelegramLink(url: string): void;
+  /** Bot API 8.0+: sends a message the bot prepared (savePreparedInlineMessage) to a chat the user picks. */
+  shareMessage?(msgId: string, callback?: (sent: boolean) => void): void;
+  isVersionAtLeast?(version: string): boolean;
   /** Opens a link in the in-app or external browser (payments must not open inside the Mini App). */
   openLink(url: string, options?: { try_instant_view?: boolean }): void;
   setHeaderColor?(color: string): void;
@@ -71,6 +74,19 @@ export function readInitData(): string | null {
   } catch {
     return null;
   }
+}
+
+/** Where a startapp link points: job_<id> → that job's page. Null for anything else. */
+export function startRoute(): string | null {
+  if (typeof window === "undefined") return null;
+  let param: string | null = window.Telegram?.WebApp?.initDataUnsafe?.start_param ?? null;
+  try {
+    param ??= new URLSearchParams(window.location.search).get("tgWebAppStartParam");
+    const initData = readInitData();
+    if (!param && initData) param = new URLSearchParams(initData).get("start_param");
+  } catch {}
+  const job = /^job_([0-9a-f-]{36})$/i.exec(param ?? "");
+  return job ? `/app/jobs/${job[1]}` : null;
 }
 
 /** The Telegram user id inside initData (unverified: only used to pick a cached session). */

@@ -1,11 +1,12 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { RouteSkeleton } from "../skeletons";
+import { usePathname, useRouter } from "next/navigation";
+import { RouteSkeleton, ScreenSkeleton } from "../skeletons";
 import type { MeDto } from "@ethio/shared";
 import { api, ApiError } from "@/lib/api";
 import { BOT_URL, DEV_AUTH, DEV_TELEGRAM_ID } from "@/lib/config";
-import { initDataUserId, readInitData } from "@/lib/telegram";
+import { initDataUserId, readInitData, startRoute } from "@/lib/telegram";
 import { Button, CenteredMessage } from "../ui";
 
 interface Session {
@@ -21,6 +22,9 @@ export function useSession(): Session {
   if (!session) throw new Error("useSession must be used inside <SessionGate>");
   return session;
 }
+
+/** The start param is acted on once per launch (not again when they come back to Profile). */
+let startHandled = false;
 
 type State =
   | { status: "loading" }
@@ -110,11 +114,20 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
     [],
   );
 
+  // A startapp link (shared job) opens the Mini App at its home; go to that job once, on launch.
+  const router = useRouter();
+  const pathname = usePathname();
+  const [startTarget] = useState(() => (startHandled ? null : startRoute()));
+  const goStart = !!startTarget && (pathname === "/app" || pathname === "/app/");
+  useEffect(() => {
+    if (state.status !== "ready" || !startTarget) return;
+    startHandled = true;
+    if (goStart) router.replace(startTarget);
+  }, [state.status, startTarget, goStart, router]);
+
   switch (state.status) {
     case "loading":
-      return (
-        <RouteSkeleton />
-      );
+      return goStart ? <ScreenSkeleton variant="detail" /> : <RouteSkeleton />;
     case "outside-telegram":
       return (
         <CenteredMessage title="Open this in Telegram" body="GoMoxie Jobs runs inside Telegram. Open the bot to continue.">
@@ -133,6 +146,7 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
         </CenteredMessage>
       );
     case "ready":
+      if (goStart && !startHandled) return <ScreenSkeleton variant="detail" />;
       return (
         <SessionContext.Provider value={{ token: state.token, me: state.me, setMe }}>{children}</SessionContext.Provider>
       );

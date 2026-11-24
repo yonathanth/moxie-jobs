@@ -21,7 +21,7 @@ import { BotService } from "../bot/bot.service";
 import { escapeHtml } from "../bot/bot.messages";
 import { PrismaService } from "../prisma/prisma.service";
 import { SettingsService } from "../settings/settings.service";
-import { allowanceLeft, cvAsText, cvTitle, decideCharge, jobDescriptionFor, toPlainContent } from "./cv.rules";
+import { allowanceLeft, cvAsText, cvTitle, decideCharge, jobDescriptionFor, planUnlocks, toPlainContent } from "./cv.rules";
 import { GomoxieClient } from "./gomoxie.client";
 
 const DAY = 24 * 3_600_000;
@@ -63,15 +63,38 @@ export class CvService {
   private async usage(userId: string) {
     const since = new Date(Date.now() - 30 * DAY);
     const [planNew, planTailor, taster, unpaidCount] = await Promise.all([
-      this.prisma.cvDocument.count({ where: { userId, charge: "plan", flow: { in: ["create", "improve"] }, createdAt: { gte: since } } }),
-      this.prisma.cvDocument.count({ where: { userId, charge: "plan", flow: "tailor", createdAt: { gte: since } } }),
+      this.prisma.cvDocument.count({ where: { userId, charge: "plan", flow: { in: ["create", "improve"] }, OR: [{ createdAt: { gte: since } }, { unlockedAt: { gte: since } }] } }),
+      this.prisma.cvDocument.count({ where: { userId, charge: "plan", flow: "tailor", OR: [{ createdAt: { gte: since } }, { unlockedAt: { gte: since } }] } }),
       this.prisma.cvDocument.count({ where: { userId, charge: "taster" } }),
       this.prisma.cvDocument.count({ where: { userId, charge: "locked", deletedAt: null } }),
     ]);
     return { used: { new: planNew, tailor: planTailor }, tasterUsed: taster > 0, unpaidCount };
   }
 
+  /**
+   * Locked CVs the plan covers now (after an upgrade, or a new month's allowance)
+   * are unlocked from it: no watermark, PDF download. Returns how many.
+   */
+  async unlockWithPlan(userId: string): Promise<number> {
+    const locked = await this.prisma.cvDocument.findMany({
+      where: { userId, charge: "locked", deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, lockedProduct: true },
+    });
+    if (locked.length === 0) return 0;
+    const [user, settings, { used }] = await Promise.all([this.prisma.user.findUniqueOrThrow({ where: { id: userId } }), this.settings.get(), this.usage(userId)]);
+    const limits = resolveLimits(effectivePlan(user, settings), settings);
+    const ids = planUnlocks(locked.map((d) => ({ id: d.id, product: d.lockedProduct })), limits, used);
+    if (ids.length === 0) return 0;
+    const res = await this.prisma.cvDocument.updateMany({
+      where: { id: { in: ids }, charge: "locked" },
+      data: { charge: "plan", lockedProduct: null, unlockedAt: new Date() },
+    });
+    return res.count;
+  }
+
   async list(user: User): Promise<CvListDto> {
+    await this.unlockWithPlan(user.id);
     const [docs, quota] = await Promise.all([
       this.prisma.cvDocument.findMany({ where: { userId: user.id, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 100 }),
       this.quota(user),
@@ -81,7 +104,8 @@ export class CvService {
   }
 
   async get(user: User, id: string): Promise<CvDetailDto> {
-    const doc = await this.owned(user, id);
+    let doc = await this.owned(user, id);
+    if (doc.charge === "locked" && (await this.unlockWithPlan(user.id)) > 0) doc = await this.owned(user, id);
     const settings = await this.settings.get();
     return this.detail(doc, user, await this.jobTitles([doc.jobId]), this.canPolish(user, settings));
   }
@@ -173,6 +197,11 @@ export class CvService {
       const raw = found.sightings[0]?.rawPost;
       jobDescription = jobDescriptionFor(found, [raw?.text, raw?.pageText].filter(Boolean).join("\n\n") || null);
     } else {
+      // "Improve my CV" from one they already have here: work from that CV (and keep its design).
+      if (req.flow === "improve" && req.baseCvId && !sourceText) {
+        baseCv = await this.owned(user, req.baseCvId);
+        sourceText = cvAsText(baseCv.content as CvContent);
+      }
       if (sourceText.length < 40) throw new BadRequestException("Tell us a bit more about your experience (a few sentences at least)");
       if (req.phone) sourceText = `${sourceText}\nPhone: ${req.phone}`;
       if (req.location) sourceText = `${sourceText}\nLocation: ${req.location}`;

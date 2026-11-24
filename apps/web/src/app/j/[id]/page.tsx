@@ -2,7 +2,7 @@ import { BellRing, Briefcase, Clock, FileText, GraduationCap, MapPin, Radar, Sen
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { PublicJobDto } from "@ethio/shared";
-import { APP_NAME, BOT_URL, botJobLink } from "@/lib/config";
+import { APP_NAME, BOT_URL, miniAppJobLink } from "@/lib/config";
 import { getPublicJob, jobHeadline, shortDate } from "@/lib/publicJob";
 
 type Props = { params: Promise<{ id: string }> };
@@ -26,7 +26,7 @@ export default async function SharedJobPage({ params }: Props) {
   const job = await getPublicJob((await params).id);
   if (!job) notFound();
 
-  const applyHref = botJobLink(job.id);
+  const applyHref = miniAppJobLink(job.id);
   const facts = factsOf(job);
 
   return (

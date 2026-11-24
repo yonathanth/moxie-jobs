@@ -12,7 +12,7 @@ import { useCv, useCvPreview, useCvTemplates, useDeleteCv, usePackCheckout, useP
 import { ScoreChip, ScoreSheet } from "@/components/cv/ScorePanel";
 import { useBackButton, usePayment, usePricing } from "@/components/miniapp/hooks";
 import { CvPageSkeleton, PaperSkeleton, TemplatesSkeleton } from "@/components/skeletons";
-import { Badge, Button, CenteredMessage, cx, ErrorText, IconTile, Sheet, Spinner, StickyFooter } from "@/components/ui";
+import { Badge, Button, CenteredMessage, cx, ErrorText, IconTile, Sheet, Skeleton, Spinner, StickyFooter } from "@/components/ui";
 import { scoreContent, type PolishTarget } from "@/lib/cv-score";
 import { getWebApp, haptic } from "@/lib/telegram";
 
@@ -49,6 +49,7 @@ const AUTOSAVE_MS = 900;
 
 function CvWorkspace({ initial }: { initial: CvDetailDto }) {
   const router = useRouter();
+  usePreloadTemplates();
   const cv = useCv(initial.id);
   const doc = cv.data ?? initial;
   const update = useUpdateCv(doc.id);
@@ -465,7 +466,7 @@ function DesignSheet({ cv, onClose }: { cv: CvDetailDto; onClose: () => void }) 
         <ErrorText>{templates.error.message}</ErrorText>
       ) : (
         <div className="grid grid-cols-3 gap-2.5 pb-2">
-          {templates.data.map((t) => {
+          {templates.data.map((t, i) => {
             const active = t.id === cv.templateId;
             const pending = update.isPending && update.variables?.templateId === t.id;
             return (
@@ -480,8 +481,7 @@ function DesignSheet({ cv, onClose }: { cv: CvDetailDto; onClose: () => void }) 
                 className="text-left"
               >
                 <span className={cx("relative block aspect-[1/1.414] overflow-hidden rounded-lg border bg-white", active ? "border-ink ring-2 ring-ink" : "border-separator")}>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- remote GoMoxie thumbnails */}
-                  <img src={t.previewUrl} alt={t.name} loading="lazy" className="absolute inset-0 size-full object-cover object-top" />
+                  <TemplateThumb src={t.previewUrl} alt={t.name} eager={i < 9} />
                   {(active || pending) && (
                     <span className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-ink text-white">
                       {pending ? <Spinner size="xs" light /> : <Check className="size-3" />}
@@ -497,4 +497,52 @@ function DesignSheet({ cv, onClose }: { cv: CvDetailDto; onClose: () => void }) 
       {update.error && <ErrorText>{update.error.message}</ErrorText>}
     </Sheet>
   );
+}
+
+/**
+ * A template's small cached picture (GoMoxie's thumb.webp): shimmer until it loads, then fades in.
+ * The first rows load straight away; the rest when scrolled near.
+ */
+function TemplateThumb({ src, alt, eager }: { src: string; alt: string; eager: boolean }) {
+  const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
+  return (
+    <>
+      {state === "loading" && <Skeleton className="absolute inset-0 rounded-none" />}
+      {state === "error" ? (
+        <span className="absolute inset-0 grid place-items-center text-[10px] text-hint-light">No preview</span>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- cached by GoMoxie's API, not Next's image optimizer
+        <img
+          // A cached image can finish before React attaches onLoad (it would stay hidden): check on mount.
+          ref={(img) => {
+            if (img?.complete && state === "loading") setState(img.naturalWidth > 0 ? "loaded" : "error");
+          }}
+          src={src}
+          alt={alt}
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          draggable={false}
+          onLoad={() => setState("loaded")}
+          onError={() => setState("error")}
+          className={cx("absolute inset-0 size-full object-cover object-top transition-opacity duration-300", state === "loaded" ? "opacity-100" : "opacity-0")}
+        />
+      )}
+    </>
+  );
+}
+
+/** Loads the template list and warms the first thumbnails while they edit, so Design opens ready. */
+function usePreloadTemplates() {
+  const templates = useCvTemplates();
+  useEffect(() => {
+    if (!templates.data) return;
+    const t = setTimeout(() => {
+      for (const tpl of templates.data.slice(0, 9)) {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = tpl.previewUrl;
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [templates.data]);
 }

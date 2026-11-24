@@ -1,6 +1,4 @@
 import {
-  applyHowText,
-  applyTarget,
   deadlineText,
   educationText,
   employerLabel,
@@ -16,8 +14,8 @@ import {
 
 /**
  * The job alert message. Pure. No emoji; labelled facts with a blank line
- * between each, so the card reads easily. Requirements and how to apply
- * (with the application link or the original post) are in the text.
+ * between each, so the card reads easily. Requirements are in the text; how to
+ * apply is not (it is on the job page and in the See details reply).
  * Two buttons side by side, both opening the Mini App (needs https):
  *   [ See details ] [ More jobs ]   the job's page / the For you feed
  * On http (local dev) they fall back to callbacks the bot answers.
@@ -89,15 +87,6 @@ export function buildCard(
   const requirements = job.requirements ?? [];
   if (requirements.length) lines.push("", "<b>Requirements:</b>", ...requirements.map((r) => `• ${e(r)}`));
 
-  const target = applyTarget(job);
-  // Click tracking (/r/:deliveryId) needs a public https API; otherwise link straight to the target.
-  const applyUrl = opts.publicApiUrl?.startsWith("https://")
-    ? new URL(`/r/${opts.deliveryId}`, opts.publicApiUrl).toString()
-    : /^https?:\/\//i.test(target.url)
-      ? target.url
-      : null;
-  lines.push("", `<b>How to apply:</b> ${howToApply(job, target.label, applyUrl, opts.sourceTitle)}`);
-
   const missing = notStated(job);
   lines.push("");
   if (missing.length) lines.push(`<i>Not stated: ${e(missing.join(", "))}</i>`);
@@ -114,18 +103,4 @@ export function buildCard(
         { text: "More jobs", callback_data: MORE_JOBS_CALLBACK },
       ];
   return { text: lines.join("\n"), buttons: [row] };
-}
-
-/** "Send your CV to hr@x.com." plus the link: the application page, or the original post when that's all there is. */
-function howToApply(job: CardJob, label: string, url: string | null, sourceTitle: string): string {
-  const e = escapeHtml;
-  const how = applyHowText(job);
-  const exact = label === "Apply";
-  const link = url ? `<a href="${e(url).replace(/"/g, "&quot;")}">${exact ? "Apply online" : "original post"}</a>` : null;
-  if (how) {
-    if (!link) return e(how);
-    return exact ? `${e(how)}\n${link}` : `${e(how)}. Details in the ${link}.`;
-  }
-  if (exact) return link ? link : "Apply online through the employer's link.";
-  return link ? `Follow the instructions in the ${link}.` : `Follow the instructions in the original post on ${e(sourceTitle)}.`;
 }

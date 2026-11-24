@@ -1,7 +1,7 @@
 import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Loader2, X } from "lucide-react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
+import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Portal } from "./Portal";
 
 /** Class names where later ones win (a caller's "w-auto" overrides the component's "w-full"). */
@@ -310,4 +310,35 @@ export function Sheet({ title, onClose, children, footer }: { title: ReactNode; 
     </div>
     </Portal>
   );
+}
+
+/** A quiet confirmation pill above the bottom bar ("Preferences saved"). Shown while `message` is set. */
+export function Toast({ message, tone = "success" }: { message: string | null; tone?: "success" | "error" }) {
+  if (!message) return null;
+  return (
+    <Portal>
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(96px+env(safe-area-inset-bottom))] z-50 flex justify-center px-4" role="status" aria-live="polite">
+        <div
+          className={cx(
+            "inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[14px] font-medium shadow-[0_12px_32px_-12px_rgba(15,17,21,0.45)] animate-[toast-in_0.25s_ease-out]",
+            tone === "success" ? "bg-ink text-white" : "bg-danger text-white",
+          )}
+        >
+          {tone === "success" ? <CheckCircle2 className="size-4 text-emerald-400" /> : <AlertCircle className="size-4" />}
+          {message}
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+/** Shows a toast message for a couple of seconds. */
+export function useToast(ms = 2400): [{ message: string | null; tone: "success" | "error" }, (message: string, tone?: "success" | "error") => void] {
+  const [state, setState] = useState<{ message: string | null; tone: "success" | "error"; at: number }>({ message: null, tone: "success", at: 0 });
+  useEffect(() => {
+    if (!state.message) return;
+    const t = setTimeout(() => setState((s) => ({ ...s, message: null })), ms);
+    return () => clearTimeout(t);
+  }, [state.at, state.message, ms]);
+  return [state, (message, tone = "success") => setState({ message, tone, at: Date.now() })];
 }

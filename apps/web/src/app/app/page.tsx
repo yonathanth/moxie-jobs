@@ -9,7 +9,8 @@ import { usePaywall } from "@/components/paywall";
 import { EXPERIENCE_BANDS, PLAN_NAME, type MeDto, type PreferencesDto, type TaxonomyDto } from "@ethio/shared";
 import { usePreferences, useRefreshMe, useSetAlertsPaused, useTaxonomy } from "@/components/miniapp/hooks";
 import { useSession } from "@/components/miniapp/session";
-import { Badge, Card, IconTile, PageHeader, Screen, Section, Sheet, Toggle } from "@/components/ui";
+import { Badge, Button, Card, IconTile, PageHeader, Screen, Section, Sheet, Toast, Toggle, useToast } from "@/components/ui";
+import { haptic } from "@/lib/telegram";
 import { ContactForm } from "@/components/cv/ContactForm";
 import { formatDate } from "@/lib/plans";
 
@@ -22,6 +23,8 @@ export default function MiniAppHome() {
   const alerts = useSetAlertsPaused();
   const refresh = useRefreshMe();
   const paywall = usePaywall();
+  const [confirmAlerts, setConfirmAlerts] = useState<"on" | "off" | null>(null);
+  const [toast, showToast] = useToast();
 
   useEffect(() => {
     if (!me.onboarded) router.replace("/app/onboarding");
@@ -49,19 +52,40 @@ export default function MiniAppHome() {
 
       <TodayCard me={me} />
 
+      {taxonomy.data && prefs.data && <PreferencesSummary prefs={prefs.data} taxonomy={taxonomy.data} />}
+
+      <CvDetails me={me} />
+      <PlanCard me={me} />
+
       <Section title="Alerts">
         <Toggle
           label="Send me job alerts"
           description={me.alertsPaused ? "Paused. You won't get new jobs until you turn this on." : "Instantly, the moment a matching job is posted"}
           checked={!me.alertsPaused}
-          onChange={(on) => alerts.mutate(!on)}
+          onChange={(on) => setConfirmAlerts(on ? "on" : "off")}
         />
       </Section>
-
-      {taxonomy.data && prefs.data && <PreferencesSummary prefs={prefs.data} taxonomy={taxonomy.data} />}
-
-      <CvDetails me={me} />
-      <PlanCard me={me} />
+      {confirmAlerts && (
+        <ConfirmAlerts
+          turningOn={confirmAlerts === "on"}
+          busy={alerts.isPending}
+          onCancel={() => setConfirmAlerts(null)}
+          onConfirm={() =>
+            alerts.mutate(confirmAlerts === "off", {
+              onSuccess: (m) => {
+                haptic.success();
+                setConfirmAlerts(null);
+                showToast(m.alertsPaused ? "Alerts paused" : "Alerts are on");
+              },
+              onError: () => {
+                haptic.error();
+                showToast("Couldn't change alerts. Try again.", "error");
+              },
+            })
+          }
+        />
+      )}
+      <Toast message={toast.message} tone={toast.tone} />
       {me.isAdmin && (
         <Link
           href="/app/admin"
@@ -246,5 +270,28 @@ function PreferencesSummary({ prefs, taxonomy }: { prefs: PreferencesDto; taxono
         ))}
       </dl>
     </Section>
+  );
+}
+
+/** Asks before pausing or resuming job alerts. */
+function ConfirmAlerts({ turningOn, busy, onCancel, onConfirm }: { turningOn: boolean; busy: boolean; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <Sheet title={turningOn ? "Turn alerts back on?" : "Pause job alerts?"} onClose={onCancel}>
+      <div>
+        <p className="text-[15px] text-hint">
+          {turningOn
+            ? "We'll message you the moment a matching job is posted again."
+            : "You won't get new matching jobs in Telegram until you turn them back on. Jobs posted meanwhile stay in your feed."}
+        </p>
+        <div className="mt-5 flex flex-col gap-2">
+          <Button variant="primary" loading={busy} onClick={onConfirm}>
+            {turningOn ? "Turn on alerts" : "Pause alerts"}
+          </Button>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </Sheet>
   );
 }

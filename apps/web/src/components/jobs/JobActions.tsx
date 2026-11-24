@@ -5,6 +5,7 @@ import { Bookmark, Check, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { JobCardDto } from "@ethio/shared";
 import { useToggleSaved } from "../miniapp/hooks";
+import { useSession } from "../miniapp/session";
 import { haptic } from "@/lib/telegram";
 import { shareJob } from "@/lib/share";
 
@@ -44,9 +45,10 @@ export function ShareButton({
   job,
   variant = "bar",
 }: {
-  job: Pick<JobCardDto, "id" | "title" | "company" | "employerLabel" | "location" | "deadline">;
+  job: Pick<JobCardDto, "id" | "title" | "company" | "employerLabel" | "premium" | "location" | "deadline">;
   variant?: Variant;
 }) {
+  const { token } = useSession();
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -58,7 +60,7 @@ export function ShareButton({
       type="button"
       onClick={async () => {
         haptic.select();
-        const res = await shareJob(job);
+        const res = await shareJob(job, token);
         if (res === "copied") {
           haptic.success();
           setCopied(true);

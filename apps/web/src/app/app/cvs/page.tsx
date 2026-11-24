@@ -3,6 +3,10 @@
 import { RowsSkeleton } from "@/components/skeletons";
 import { ArrowRight, ChevronRight, FilePlus2, FileText, Gauge, Lock, Target, Upload, type LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { NewCvModal } from "@/components/cv/NewCvModal";
+import { haptic } from "@/lib/telegram";
 import type { CvQuotaDto, CvSummaryDto } from "@ethio/shared";
 import { useCvList } from "@/components/cv/hooks";
 import { postedAgo } from "@/components/jobs/JobCard";
@@ -10,14 +14,23 @@ import { Badge, Card, IconTile, PageHeader, Screen, type IconTone } from "@/comp
 
 export default function CvsPage() {
   const list = useCvList();
+  const router = useRouter();
+  const [flow, setFlow] = useState<"create" | "improve" | null>(null);
+  // The modal needs the quota (what it costs); before the list loads, the page version works the same.
+  const start = (f: "create" | "improve") => {
+    haptic.select();
+    if (list.data) setFlow(f);
+    else router.push(`/app/cvs/new?mode=${f}`);
+  };
   return (
     <Screen className="animate-fade-up">
+      {flow && list.data && <NewCvModal flow={flow} quota={list.data.quota} cvs={list.data.items} onClose={() => setFlow(null)} />}
       <PageHeader title="CVs" subtitle="Make a strong CV, then tailor it to each job in one tap." />
       {list.data && <QuotaLine quota={list.data.quota} />}
 
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <StartCard href="/app/cvs/new?mode=create" icon={FilePlus2} tone="accent" title="Create a CV" body="From a few answers" />
-        <StartCard href="/app/cvs/new?mode=improve" icon={Upload} tone="sky" title="Improve my CV" body="Upload PDF, Word or a photo" />
+      <div className="mt-5 flex flex-col gap-3">
+        <StartCard onClick={() => start("create")} icon={FilePlus2} tone="accent" title="Create a CV" body="From a few answers" />
+        <StartCard onClick={() => start("improve")} icon={Upload} tone="sky" title="Improve my CV" body="Upload PDF, Word or a photo" />
       </div>
 
       {list.isPending ? (
@@ -59,22 +72,24 @@ const TINT: Partial<Record<IconTone, string>> = {
   emerald: "border-emerald-200/80 bg-[linear-gradient(135deg,#ebf8f2_0%,#f7fcf9_50%,#ffffff_100%)]",
 };
 
-function StartCard({ href, icon: Icon, tone, title, body }: { href: string; icon: LucideIcon; tone: IconTone; title: string; body: string }) {
+function StartCard({ onClick, icon: Icon, tone, title, body }: { onClick: () => void; icon: LucideIcon; tone: IconTone; title: string; body: string }) {
   return (
-    <Link href={href} className="group">
+    <button type="button" onClick={onClick} className="group w-full text-left">
       <Card
-        className={`relative h-full p-3.5 shadow-[0_12px_28px_-14px_rgba(15,17,21,0.35)] transition-[transform,box-shadow] group-active:scale-[0.98] group-active:shadow-[0_6px_16px_-10px_rgba(15,17,21,0.3)] ${TINT[tone] ?? ""}`}
+        className={`flex items-center gap-3.5 p-4 shadow-[0_12px_28px_-14px_rgba(15,17,21,0.35)] transition-[transform,box-shadow] group-active:scale-[0.99] group-active:shadow-[0_6px_16px_-10px_rgba(15,17,21,0.3)] ${TINT[tone] ?? ""}`}
       >
-        <span className="absolute right-3 top-3 grid size-7 place-items-center rounded-full bg-white/80 text-text shadow-[0_2px_6px_-2px_rgba(15,17,21,0.2)]">
-          <ArrowRight className="size-4" />
-        </span>
         <IconTile tone={tone}>
           <Icon className="size-5" />
         </IconTile>
-        <p className="mt-3 text-[15px] font-semibold">{title}</p>
-        <p className="text-[12px] text-hint">{body}</p>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[16px] font-semibold">{title}</span>
+          <span className="block text-[13px] text-hint">{body}</span>
+        </span>
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/80 text-text shadow-[0_2px_6px_-2px_rgba(15,17,21,0.2)]">
+          <ArrowRight className="size-4" />
+        </span>
       </Card>
-    </Link>
+    </button>
   );
 }
 

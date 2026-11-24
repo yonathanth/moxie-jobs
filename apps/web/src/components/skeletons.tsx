@@ -50,12 +50,15 @@ export function ScreenSkeleton({ variant = "list" }: { variant?: SkeletonVariant
       {variant === "cvs" && (
         <>
           <Header />
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-5 flex flex-col gap-3">
             {[0, 1].map((i) => (
-              <Card key={i} className="p-3.5">
+              <Card key={i} className="flex items-center gap-3.5 p-4">
                 <Skeleton className="size-10 rounded-xl" />
-                <Skeleton className="mt-3 h-4 w-3/4" />
-                <Skeleton className="mt-2 h-3 w-1/2" />
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-2/5" />
+                  <Skeleton className="mt-2 h-3 w-3/5" />
+                </div>
+                <Skeleton className="size-8 rounded-full" />
               </Card>
             ))}
           </div>
@@ -124,12 +127,17 @@ function JobsSkeleton() {
 function JobDetailSkeleton() {
   return (
     <>
+      <Skeleton className="mb-4 h-11 w-full rounded-full" />
       <div className="flex gap-2">
         <Skeleton className="h-6 w-20 rounded-full" />
         <Skeleton className="h-6 w-28 rounded-full" />
       </div>
       <Skeleton className="mt-3 h-7 w-4/5" />
       <Skeleton className="mt-2 h-4 w-1/2" />
+      <div className="mt-3 flex gap-2">
+        <Skeleton className="h-9 w-20 rounded-full" />
+        <Skeleton className="h-9 w-20 rounded-full" />
+      </div>
       <Card className="mt-5 grid gap-3.5">
         {Array.from({ length: 5 }, (_, i) => (
           <div key={i} className="flex items-center gap-3">
@@ -144,6 +152,20 @@ function JobDetailSkeleton() {
         <Skeleton className="h-3.5 w-11/12" />
         <Skeleton className="h-3.5 w-4/5" />
         <Skeleton className="h-3.5 w-3/5" />
+      </Card>
+      <Skeleton className="mt-6 h-5 w-28" />
+      <Card className="mt-2 grid gap-2.5">
+        {["w-4/5", "w-3/5", "w-2/3"].map((w) => (
+          <div key={w} className="flex items-center gap-2.5">
+            <Skeleton className="size-4 rounded-full" />
+            <Skeleton className={`h-3.5 ${w}`} />
+          </div>
+        ))}
+      </Card>
+      <Skeleton className="mt-6 h-5 w-28" />
+      <Card className="mt-2 grid gap-2">
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-2/3" />
       </Card>
     </>
   );
@@ -208,6 +230,14 @@ function ProfileSkeleton() {
       <div className="mt-5">
         <RowsSkeleton count={3} />
       </div>
+      <Skeleton className="mt-6 h-5 w-20" />
+      <Card className="mt-2 flex items-center gap-3">
+        <div className="flex-1">
+          <Skeleton className="h-4 w-2/5" />
+          <Skeleton className="mt-2 h-3 w-3/5" />
+        </div>
+        <Skeleton className="h-7 w-12 rounded-full" />
+      </Card>
     </>
   );
 }

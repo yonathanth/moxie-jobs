@@ -8,7 +8,7 @@ import { useBackButton, usePreferences, useSavePreferences, useTaxonomy } from "
 import { useSession } from "@/components/miniapp/session";
 import { PreferenceSections } from "@/components/preferences/PreferenceSections";
 import { fromDto, hasTarget, overLimits, salaryInvalid, trimToLimits } from "@/components/preferences/state";
-import { Button, Card, CenteredMessage, ErrorText, PageHeader, Screen, StickyFooter } from "@/components/ui";
+import { Button, Card, CenteredMessage, ErrorText, PageHeader, Screen, StickyFooter, Toast, useToast } from "@/components/ui";
 import { ChevronRight, Crown } from "lucide-react";
 import type { PlanLimits } from "@ethio/shared";
 import { usePaywall, type PaywallReason } from "@/components/paywall";
@@ -20,6 +20,8 @@ export default function PreferencesPage() {
   const { me } = useSession();
   const taxonomy = useTaxonomy();
   const saved = usePreferences();
+  // Outside the Editor: it remounts once the save comes back, which would wipe its own state.
+  const [toast, showToast] = useToast();
 
   useEffect(() => {
     if (!me.onboarded) router.replace("/app/onboarding");
@@ -42,20 +44,29 @@ export default function PreferencesPage() {
   }
 
   // Keyed so the form re-initialises if the saved preferences change underneath it.
-  return <Editor key={saved.data?.updatedAt ?? "new"} initial={fromDto(saved.data)} taxonomy={taxonomy.data!} />;
+  return (
+    <>
+      <Editor
+        key={saved.data?.updatedAt ?? "new"}
+        initial={fromDto(saved.data)}
+        taxonomy={taxonomy.data!}
+        onSaved={() => showToast("Preferences saved. New matches use them from now on.")}
+        onFailed={() => showToast("Couldn't save. Try again.", "error")}
+      />
+      <Toast message={toast.message} tone={toast.tone} />
+    </>
+  );
 }
 
-function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: TaxonomyDto }) {
+function Editor({ initial, taxonomy, onSaved, onFailed }: { initial: Preferences; taxonomy: TaxonomyDto; onSaved: () => void; onFailed: () => void }) {
   const { me } = useSession();
   const save = useSavePreferences();
   const [prefs, setPrefs] = useState(initial);
-  const [justSaved, setJustSaved] = useState(false);
   const dirty = JSON.stringify(prefs) !== JSON.stringify(initial);
   const over = overLimits(prefs, me.limits);
   const paywall = usePaywall();
 
   const onChange = (patch: Partial<Preferences>) => {
-    setJustSaved(false);
     setPrefs((p) => ({ ...p, ...patch }));
   };
 
@@ -63,9 +74,12 @@ function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: Taxonom
     save.mutate(prefs, {
       onSuccess: () => {
         haptic.success();
-        setJustSaved(true);
+        onSaved();
       },
-      onError: () => haptic.error(),
+      onError: () => {
+        haptic.error();
+        onFailed();
+      },
     });
 
   return (
@@ -118,7 +132,7 @@ function Editor({ initial, taxonomy }: { initial: Preferences; taxonomy: Taxonom
         )}
         {over.length > 0 && <p className="text-center text-xs text-hint">Remove the inactive picks, or keep the active ones, to save.</p>}
         <Button onClick={submit} disabled={!dirty || !hasTarget(prefs) || salaryInvalid(prefs) || over.length > 0 || save.isPending}>
-          {save.isPending ? "Saving…" : justSaved && !dirty ? "Saved ✓" : "Save changes"}
+          {save.isPending ? "Saving…" : "Save changes"}
         </Button>
       </StickyFooter>
     </Screen>

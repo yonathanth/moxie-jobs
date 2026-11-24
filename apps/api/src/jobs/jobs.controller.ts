@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, ParseUUIDPipe, Put, Query, UseGuards } from "@nestjs/common";
+import { Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put, Query, UseGuards } from "@nestjs/common";
 import { SkipThrottle } from "@nestjs/throttler";
 import { z } from "zod";
 import type { User } from "@ethio/db";
@@ -70,6 +70,12 @@ export class JobsController {
   @Delete(":id/save")
   unsave(@CurrentUser() user: User, @Param("id", new ParseUUIDPipe()) id: string) {
     return this.jobs.unsave(user, id);
+  }
+
+  /** Prepares the job as a photo message for WebApp.shareMessage. */
+  @Post(":id/share")
+  share(@CurrentUser() user: User, @Param("id", new ParseUUIDPipe()) id: string): Promise<{ id: string }> {
+    return this.jobs.prepareShare(user, id);
   }
 
   @Get(":id")

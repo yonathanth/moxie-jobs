@@ -13,12 +13,12 @@ import { useBackButton, useJob, usePayment, usePricing } from "@/components/mini
 import { useSession } from "@/components/miniapp/session";
 import { usePaywall } from "@/components/paywall";
 import { Button, Card, CenteredMessage, ErrorText, IconTile, PageHeader, Screen, Sheet, Skeleton, StickyFooter, type IconTone } from "@/components/ui";
+import { MIN_SOURCE_CHARS, MinLengthHint, openCheckout, PackPrompt, PackWaiting, Working, type Mode } from "@/components/cv/flow";
 import { MoxieLoader } from "@/components/moxie";
 import { ApiError } from "@/lib/api";
 import { formatBirr } from "@/lib/plans";
 import { getWebApp, haptic } from "@/lib/telegram";
 
-type Mode = "create" | "improve" | "tailor";
 
 export default function NewCvPage() {
   return (
@@ -218,7 +218,6 @@ function TailorPick({
       </p>
       <StickyFooter>
         {error && <ErrorText>{error}</ErrorText>}
-        <PriceNote flow="tailor" quota={quota} />
         <Button variant="accent" onClick={() => onTailor(chosen)}>
           Tailor my CV
         </Button>
@@ -286,7 +285,7 @@ function SourceForm({
     setFileName(file.name);
     importCv.mutate(file, {
       onSuccess: (r) => {
-        if (r.text.trim().length >= 40) submit("improve", r.text);
+        if (r.text.trim().length >= MIN_SOURCE_CHARS) submit("improve", r.text);
         else {
           // Too little text came out (e.g. a blurry photo): let them paste it instead.
           haptic.error();
@@ -304,7 +303,7 @@ function SourceForm({
   ) : (
     <PageHeader
       title={mode === "improve" ? "Improve my CV" : "Create a CV"}
-      subtitle={step === "details" ? undefined : mode === "improve" ? "Upload your current CV and we'll rewrite it to stand out." : "Tell us about your experience; we write a professional CV."}
+      subtitle={step === "details" ? undefined : mode === "improve" ? "We'll rewrite it to stand out." : "The more you tell us, the better your CV."}
     />
   );
 
@@ -320,7 +319,7 @@ function SourceForm({
             </IconTile>
             <div>
               <p className="text-[15px] font-semibold">Your details</p>
-              <p className="text-[13px] text-hint">At the top of every CV. You fill this in once.</p>
+              <p className="text-[13px] text-hint">Printed at the top of your CV.</p>
             </div>
           </div>
           <ContactForm
@@ -339,7 +338,7 @@ function SourceForm({
   }
 
   const contact = me.cvContact;
-  const ready = !!contact && text.trim().length >= 40;
+  const ready = !!contact && text.trim().length >= MIN_SOURCE_CHARS;
 
   return (
     <Screen className="animate-fade-up">
@@ -389,21 +388,11 @@ function SourceForm({
               icon={Upload}
               tone="sky"
               title="Upload a file"
-              body="PDF, Word (.docx) or a clear photo. We improve it right away."
+              body="PDF, Word or a photo"
               onClick={() => {
                 haptic.select();
                 setSource("upload");
                 fileInput.current?.click();
-              }}
-            />
-            <ChoiceCard
-              icon={ClipboardPaste}
-              tone="violet"
-              title="Paste the text"
-              body="Copy your CV's text and paste it in."
-              onClick={() => {
-                haptic.select();
-                setSource("paste");
               }}
             />
           </div>
@@ -412,9 +401,6 @@ function SourceForm({
               <ErrorText>{importCv.error.message}</ErrorText>
             </div>
           )}
-          <div className="mt-4">
-            <PriceNote flow={mode} quota={quota} freeBase={!!fromJob} />
-          </div>
           {error && (
             <div className="mt-2">
               <ErrorText>{error}</ErrorText>
@@ -440,7 +426,7 @@ function SourceForm({
             placeholder={mode === "improve" ? "Paste your CV's text here." : PROMPT}
             className="w-full rounded-2xl border border-separator bg-surface p-3.5 text-[15px] leading-relaxed outline-none placeholder:text-hint-light focus:border-ink"
           />
-          <p className="mt-1 px-1 text-[12px] text-hint">Plain words are fine, in English or Amharic. We only use what you tell us. Nothing is made up.</p>
+          <MinLengthHint length={text.trim().length} what={mode === "improve" ? "paste your whole CV" : "write a few sentences about your work"} />
         </section>
       )}
 
@@ -461,7 +447,6 @@ function SourceForm({
       {showText && (
       <StickyFooter>
         {error && <ErrorText>{error}</ErrorText>}
-        <PriceNote flow={mode} quota={quota} freeBase={!!fromJob} />
         <Button variant="accent" disabled={!ready || importCv.isPending} onClick={() => submit(mode, text)}>
           {fromJob ? "Make my CV and tailor it" : mode === "improve" ? "Improve my CV" : "Create my CV"}
         </Button>
@@ -486,19 +471,6 @@ function StepDots({ current, total, label }: { current: number; total: number; l
       </p>
     </div>
   );
-}
-
-/** What this will cost, from the plan allowance and prices. */
-/** What this will cost: plan allowance → pack credit → free to make, unlocked with a pack. */
-function PriceNote({ flow, quota, freeBase }: { flow: Mode; quota: CvQuotaDto; freeBase?: boolean }) {
-  const from = quota.packs[0] ? `CV packs from ${formatBirr(quota.packs[0].price)}` : "a CV pack";
-  const tailorCost = quota.tailorLeft !== 0 ? "included in your plan" : quota.credits.tailor > 0 ? "uses 1 credit" : `free to make, unlock with ${from}`;
-  const newCost = quota.newLeft !== 0 ? "Included in your plan" : quota.credits.new > 0 ? `Uses 1 of your ${quota.credits.new} credits` : `Free to make · unlock with ${from}`;
-  let note: string;
-  if (freeBase) note = quota.freeTailoringAvailable ? "Free: your CV and your first tailored CV" : `Your CV is free. The tailored CV: ${tailorCost}`;
-  else if (flow === "tailor") note = quota.freeTailoringAvailable ? "Free: your first tailored CV" : tailorCost.charAt(0).toUpperCase() + tailorCost.slice(1);
-  else note = newCost;
-  return <p className="text-center text-[12px] text-hint">{note}</p>;
 }
 
 type MismatchState = { reason: string; missing: string[]; newCvId?: string };
@@ -617,27 +589,8 @@ function NextStep({ icon: Icon, tone, title, body, onClick }: { icon: LucideIcon
   );
 }
 
-/** Moxie at work while the AI writes, improves or tailors the CV (as on gomoxie.app). */
-function Working({ phase, flow, jobTitle }: { phase: "base" | "tailor"; flow: Mode; jobTitle?: string }) {
-  const { me } = useSession();
-  const crowned = me.plan !== "free";
-  if (phase === "tailor") {
-    return (
-      <MoxieLoader
-        animation="tailor"
-        crowned={crowned}
-        messages={[jobTitle ? `Tailoring your CV to ${jobTitle}…` : "Reading the job post…", "Matching your experience to it…", "Cutting what doesn't fit…", "Keeping it all true to you…"]}
-      />
-    );
-  }
-  if (flow === "improve") {
-    return <MoxieLoader animation="polish" crowned={crowned} messages={["Improving your CV…", "Tightening every bullet…", "Bringing your results forward…", "Cutting the filler…"]} />;
-  }
-  return <MoxieLoader animation="write" crowned={crowned} messages={["Writing your CV…", "Choosing strong action verbs…", "Turning duties into results…", "Laying it out cleanly…"]} />;
-}
-
 /** A big tappable option with an icon and a chevron. */
-function ChoiceCard({ icon: Icon, tone, title, body, onClick }: { icon: LucideIcon; tone: IconTone; title: string; body: string; onClick: () => void }) {
+function ChoiceCard({ icon: Icon, tone, title, body, onClick }: { icon: LucideIcon; tone: IconTone; title: string; body?: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -649,103 +602,10 @@ function ChoiceCard({ icon: Icon, tone, title, body, onClick }: { icon: LucideIc
       </IconTile>
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] font-semibold">{title}</span>
-        <span className="block text-[12px] text-hint">{body}</span>
+        {body && <span className="block text-[12px] text-hint">{body}</span>}
       </span>
       <ChevronRight className="size-5 shrink-0 text-hint" />
     </button>
   );
 }
 
-function openCheckout(url: string) {
-  const wa = getWebApp();
-  if (wa) wa.openLink(url);
-  else window.open(url, "_blank", "noopener");
-}
-
-/** Out of CVs: pick a pack. After paying, the CV they were making is made straight away. */
-function PackPrompt({ message, onClose, onCheckout }: { message: string; onClose: () => void; onCheckout: (p: { id: string; url: string }) => void }) {
-  const paywall = usePaywall();
-  const pricing = usePricing();
-  const checkout = usePackCheckout();
-  return (
-    <Sheet title="Get more CVs" onClose={onClose}>
-      <p className="mb-5 text-[13px] text-hint">{message} Pick a CV pack and we&apos;ll make this CV as soon as you&apos;ve paid. Nothing you typed is lost.</p>
-      {pricing.data ? (
-        <PackCards
-          packs={pricing.data.packs}
-          busyId={checkout.isPending ? checkout.variables?.pack : null}
-          disabled={checkout.isPending}
-          onBuy={(pack) => {
-            haptic.select();
-            checkout.mutate({ pack }, { onSuccess: (r) => onCheckout({ id: r.paymentId, url: r.url }), onError: () => haptic.error() });
-          }}
-        />
-      ) : (
-        <div className="flex flex-col gap-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-[76px] rounded-2xl" />
-          ))}
-        </div>
-      )}
-      {checkout.error && (
-        <div className="mt-3">
-          <ErrorText>{checkout.error.message}</ErrorText>
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={() => {
-          onClose();
-          paywall.gate("cvs");
-        }}
-        className="mt-4 w-full text-center text-[13px] font-semibold text-accent-strong"
-      >
-        Or get Pro: new and tailored CVs every month
-      </button>
-    </Sheet>
-  );
-}
-
-/** Waits for the pack payment, then hands back so the CV gets made. */
-function PackWaiting({ payment, onPaid, onCancel }: { payment: { id: string; url: string }; onPaid: () => void; onCancel: () => void }) {
-  const status = usePayment(payment.id);
-  const state = status.data?.status ?? "pending";
-  const done = useRef(false);
-  useEffect(() => {
-    if (state === "paid" && !done.current) {
-      done.current = true;
-      haptic.success();
-      onPaid();
-    }
-  }, [state, onPaid]);
-
-  if (state === "failed" || state === "cancelled") {
-    return (
-      <CenteredMessage
-        icon={<X className="size-10 text-danger" />}
-        title={state === "cancelled" ? "Payment cancelled" : "Payment didn't go through"}
-        body="No money was taken. Your CV details are still here."
-      >
-        <Button onClick={onCancel}>Back to my CV</Button>
-      </CenteredMessage>
-    );
-  }
-  return (
-    <CenteredMessage
-      icon={
-        <IconTile tone="neutral">
-          <Loader2 className="size-5 animate-spin" />
-        </IconTile>
-      }
-      title="Finish paying in SantimPay"
-      body="Complete the payment on the page that opened, then come back. We'll make your CV as soon as it's confirmed."
-    >
-      <div className="flex flex-col gap-2">
-        <Button onClick={() => openCheckout(payment.url)}>Open payment page again</Button>
-        <Button variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </CenteredMessage>
-  );
-}

@@ -269,6 +269,12 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     if (!result) return (await this.prisma.payment.findUnique({ where: { id: payment.id } }))!;
 
     this.logger.log(`payment ${payment.id} paid: user=${payment.userId} ${payment.plan} until ${result.end.toISOString()}`);
+    // CVs made while on free (watermarked) that the new plan covers are unlocked now.
+    const unlocked = await this.cvs.unlockWithPlan(payment.userId).catch((err: unknown) => {
+      this.logger.warn(`unlocking CVs after payment ${payment.id} failed: ${String(err)}`);
+      return 0;
+    });
+    if (unlocked) this.logger.log(`payment ${payment.id}: unlocked ${unlocked} CV(s) with the plan`);
     const limits = resolveLimits(payment.plan as "pro" | "career", await this.settings.get());
     await this.bot
       .sendPlanActivated(result.user, PLAN_NAME[payment.plan as "pro" | "career"], result.end, limits)

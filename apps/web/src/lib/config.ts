@@ -9,6 +9,8 @@ export const DEV_TELEGRAM_ID = Number(process.env.NEXT_PUBLIC_DEV_TELEGRAM_ID) |
 export const APP_NAME = "GoMoxie Jobs";
 /** Deep link that opens the bot on a shared job (the bot replies with that job). */
 export const botJobLink = (jobId: string) => `${BOT_URL}?start=job_${jobId}`;
+/** Opens the job straight in the Mini App (the bot's Main Mini App, set in BotFather); routed by SessionGate. */
+export const miniAppJobLink = (jobId: string) => `${BOT_URL}?startapp=job_${jobId}`;
 /** Public address of this site: absolute URLs in link previews (og:image). */
 export const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.NODE_ENV === "production" ? "https://jobs.gomoxie.app" : "http://localhost:3000")
