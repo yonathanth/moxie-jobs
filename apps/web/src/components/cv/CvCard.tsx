@@ -71,8 +71,9 @@ export function CvCard({ cv }: { cv: CvSummaryDto }) {
         {preview.data && (
           <iframe
             title={`${cv.title} preview`}
-            srcDoc={preview.data.html}
+            srcDoc={thumbHtml(preview.data.html)}
             sandbox="allow-same-origin"
+            scrolling="no"
             tabIndex={-1}
             onLoad={() => setLoaded(true)}
             className={cx("pointer-events-none absolute left-0 top-0 origin-top-left border-0 bg-white transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
@@ -109,4 +110,11 @@ export function CvCardsSkeleton({ count = 4 }: { count?: number }) {
       ))}
     </div>
   );
+}
+
+/** The page alone, white, no scrollbars: the preview HTML is made for a scrolling screen view (GoMoxie's body.preview: a grey desk with 24px padding, page shadow, scrollbars). */
+const THUMB_CSS =
+  "<style>html,body,body.preview{overflow:hidden!important;background:#fff!important;margin:0!important;padding:0!important;scrollbar-width:none!important}body.preview .page{margin:0!important;box-shadow:none!important}::-webkit-scrollbar{display:none!important}</style>";
+function thumbHtml(html: string): string {
+  return html.includes("</head>") ? html.replace("</head>", `${THUMB_CSS}</head>`) : THUMB_CSS + html;
 }
