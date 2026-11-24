@@ -236,6 +236,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
         </Frame>,
       );
 
+    case "create":
+      return cardResponse(
+        <Frame footer={{ note: "Your first CV is free", cta: "Make my CV" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <Headline size={62} max={600}>Make a strong CV in minutes</Headline>
+              <Sub max={580}>Tell us about your work in plain words, in English or Amharic. We write it.</Sub>
+            </div>
+            <CvSheet stamp="Ready in minutes" />
+          </div>
+        </Frame>,
+      );
+
     case "improve":
       return cardResponse(
         <Frame footer={{ note: "Then tailor it to any job in one tap", cta: "Improve my CV" }}>

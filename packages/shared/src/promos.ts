@@ -169,7 +169,7 @@ export const SHARE_APP_MESSAGES: Record<ShareAppKind, ShareAppMessage> = {
     button: "Find jobs for me",
   },
   cv_create: {
-    image: "/og/msg/cv",
+    image: "/og/msg/create",
     caption: "<b>Make a strong CV in minutes</b>\n\nTell it about your work in plain words, in English or Amharic, and get a professional CV. Your first one is free.",
     button: "Make my CV",
   },
