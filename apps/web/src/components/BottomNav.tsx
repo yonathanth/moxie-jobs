@@ -33,7 +33,7 @@ export function BottomNav() {
   if (!mounted || !me.onboarded || !SHOWN_ON.has(path)) return null;
 
   return createPortal(
-    // The current tab (icon and name) sits in a soft rounded box; the others are plain.
+    // The current tab (icon and name) sits in a soft orange rounded box; the others are plain.
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-separator bg-bg/90 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       <ul className="mx-auto flex max-w-lg gap-1 px-2 py-1.5">
         {ITEMS.map(({ href, label, icon: Icon, match }) => {
@@ -45,7 +45,7 @@ export function BottomNav() {
                 aria-current={active ? "page" : undefined}
                 className={clsx(
                   "flex flex-col items-center gap-0.5 rounded-2xl py-1.5 text-[11px] font-semibold transition-colors",
-                  active ? "bg-pill text-ink" : "text-hint hover:text-text active:bg-pill/60",
+                  active ? "bg-accent-soft text-accent-strong" : "text-hint hover:text-text active:bg-accent-soft/60",
                 )}
               >
                 <Icon className="size-[22px]" strokeWidth={active ? 2.3 : 2} />
