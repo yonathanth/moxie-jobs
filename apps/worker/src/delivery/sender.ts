@@ -108,11 +108,13 @@ export class Sender {
       const dead = deliveries.filter((d) => !live.includes(d));
       if (dead.length) await this.finish(dead.map((d) => d.id), "skipped", "job_closed");
 
-      // Daily cap (free plan): count everything sent today in Addis Ababa time.
+      // Daily cap (free plan): new-job alerts sent today in Addis Ababa time. The catch-up after
+      // setting preferences (mode "backfill", already a short list) doesn't use it up and isn't capped:
+      // someone who signs up at night still gets their new alerts the next day.
       const limits = resolveLimits(effectivePlan(user, settings, now), settings);
       let budget = Infinity;
       if (limits.dailyJobCap !== null) {
-        const sentToday = await prisma.delivery.count({ where: { userId, status: "sent", sentAt: { gte: startOfDayEat(now) } } });
+        const sentToday = await prisma.delivery.count({ where: { userId, status: "sent", mode: { not: "backfill" }, sentAt: { gte: startOfDayEat(now) } } });
         budget = Math.max(0, limits.dailyJobCap - sentToday);
       }
       // Most urgent first, then newest, so a capped day keeps the best ones.
@@ -123,8 +125,11 @@ export class Sender {
         const db = jb.deadline?.getTime() ?? Infinity;
         return da - db || jb.firstSeenAt.getTime() - ja.firstSeenAt.getTime();
       });
-      const cards = ordered.slice(0, Number.isFinite(budget) ? budget : ordered.length);
-      const over = ordered.slice(cards.length);
+      const catchUp = ordered.filter((d) => d.mode === "backfill");
+      const alerts = ordered.filter((d) => d.mode !== "backfill");
+      const allowed = alerts.slice(0, Number.isFinite(budget) ? budget : alerts.length);
+      const cards = [...catchUp, ...allowed];
+      const over = alerts.slice(allowed.length);
       if (over.length) await this.finish(over.map((d) => d.id), "skipped", "daily_cap");
 
       try {

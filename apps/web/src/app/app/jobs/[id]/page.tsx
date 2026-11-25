@@ -3,6 +3,8 @@
 import clsx from "clsx";
 import { ArrowRight, Briefcase, Check, Clock, ExternalLink, FileText, GraduationCap, Lock, MapPin, User, Wallet } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { TailorCvModal } from "@/components/cv/TailorCvModal";
+import { useCvList } from "@/components/cv/hooks";
 import { Suspense, useState } from "react";
 import { ScreenSkeleton } from "@/components/skeletons";
 import type { JobCardDto } from "@ethio/shared";
@@ -53,11 +55,14 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
   const paywall = usePaywall();
   const [cvHighlight] = useState(wantsCv);
 
-  const router = useRouter();
+  // "Get a custom-made CV for this job": the same modal as on the CV tab. ?cv=1 (from the bot) opens it right away.
+  const cvList = useCvList();
+  const [tailoring, setTailoring] = useState(wantsCv);
   const tailor = () => {
     haptic.select();
-    router.push(`/app/cvs/new?mode=tailor&jobId=${job.id}`);
+    setTailoring(true);
   };
+  const bases = (cvList.data?.items ?? []).filter((c) => c.kind === "base");
 
   const days = daysLeft(job.deadline);
   const closed = days !== null && days < 0;
@@ -65,6 +70,9 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 pb-36 pt-5 animate-fade-up">
+      {tailoring && cvList.data && !job.locked && (
+        <TailorCvModal job={job} bases={bases} freeTailoring={cvList.data.quota.freeTailoringAvailable} onClose={() => setTailoring(false)} />
+      )}
       {!job.locked && !closed && (
         <div className="sticky top-0 z-20 -mx-4 -mt-5 mb-4 bg-bg/90 px-4 pb-3 pt-3 backdrop-blur">
           <button

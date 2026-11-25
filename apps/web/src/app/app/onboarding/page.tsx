@@ -12,7 +12,7 @@ import { PreferenceSections } from "@/components/preferences/PreferenceSections"
 import { EMPTY_PREFERENCES } from "@/components/preferences/state";
 import { Button, CenteredMessage, ErrorText, IconTile, PageHeader, Screen, StickyFooter } from "@/components/ui";
 import { ApiError } from "@/lib/api";
-import { haptic } from "@/lib/telegram";
+import { askToAllowMessages, haptic } from "@/lib/telegram";
 
 /**
  * First run: one step, the kinds of jobs they want. Everything else (degree, experience, city,
@@ -46,6 +46,8 @@ export default function OnboardingPage() {
       onSuccess: () => {
         haptic.success();
         setDone(true);
+        // Opened from a link without starting the bot: ask now, or their alerts can't be delivered.
+        askToAllowMessages();
       },
       onError: () => haptic.error(),
     });

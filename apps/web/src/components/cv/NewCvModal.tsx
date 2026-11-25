@@ -322,7 +322,7 @@ export function NewCvModal({
 }
 
 /** The modal frame: centered card, close button, each step sliding in. */
-function FlowModal({ stepKey, onClose, hidden, children }: { stepKey: string; onClose?: () => void; hidden?: boolean; children: React.ReactNode }) {
+export function FlowModal({ stepKey, onClose, hidden, children }: { stepKey: string; onClose?: () => void; hidden?: boolean; children: React.ReactNode }) {
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -355,7 +355,7 @@ function FlowModal({ stepKey, onClose, hidden, children }: { stepKey: string; on
   );
 }
 
-function StepTitle({ title, body }: { title: string; body?: string }) {
+export function StepTitle({ title, body }: { title: string; body?: string }) {
   return (
     <div className="mb-5 px-6 text-center">
       <h2 className="text-[22px] font-bold leading-tight tracking-tight">{title}</h2>
@@ -374,7 +374,7 @@ function Footer({ error, quota, flow, children }: { error: string | null; quota:
 }
 
 /** A step option, as on gomoxie.app: icon tile, title and line, chevron. */
-function OptionCard({ icon: Icon, tone, title, body, onClick }: { icon: LucideIcon; tone: IconTone; title: string; body?: string; onClick: () => void }) {
+export function OptionCard({ icon: Icon, tone, title, body, onClick }: { icon: LucideIcon; tone: IconTone; title: string; body?: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -394,7 +394,7 @@ function OptionCard({ icon: Icon, tone, title, body, onClick }: { icon: LucideIc
 }
 
 /** Waiting for a CV pack payment inside the modal; on payment the CV is made straight away. */
-function PayingStep({ payment, onPaid, onCancel }: { payment: { id: string; url: string }; onPaid: () => void; onCancel: () => void }) {
+export function PayingStep({ payment, onPaid, onCancel }: { payment: { id: string; url: string }; onPaid: () => void; onCancel: () => void }) {
   const status = usePayment(payment.id);
   const state = status.data?.status ?? "pending";
   const done = useRef(false);

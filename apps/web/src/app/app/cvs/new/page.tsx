@@ -50,9 +50,13 @@ function NewCv() {
   useBackButton(() => router.back());
 
   const bases = useMemo(() => (list.data?.items ?? []).filter((c) => c.kind === "base"), [list.data]);
+  // Tailoring lives in a modal on the job page now: old links (the bot, bookmarks) go there.
+  useEffect(() => {
+    if (mode === "tailor" && jobId) router.replace(`/app/jobs/${jobId}?cv=1`);
+  }, [mode, jobId, router]);
   const quota = list.data?.quota;
 
-  if (list.isPending || (mode === "tailor" && jobId && job.isPending)) {
+  if (list.isPending || (mode === "tailor" && jobId)) {
     return (
       <ScreenSkeleton variant="form" />
     );

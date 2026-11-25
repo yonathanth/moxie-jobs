@@ -2,7 +2,9 @@ import { START_APP_ROUTES } from "@ethio/shared";
 /** Minimal typings for the parts of Telegram's WebApp API we use. */
 export interface TelegramWebApp {
   initData: string;
-  initDataUnsafe: { start_param?: string; user?: { id: number; first_name?: string } };
+  initDataUnsafe: { start_param?: string; user?: { id: number; first_name?: string; allows_write_to_pm?: boolean } };
+  /** Bot API 6.9+: asks the user to let the bot message them (needed if they opened the app without starting the chat). */
+  requestWriteAccess?(callback?: (granted: boolean) => void): void;
   colorScheme: "light" | "dark";
   platform: string;
   ready(): void;
@@ -111,4 +113,21 @@ export function prepareWebApp() {
   wa.setHeaderColor?.("#fdfdfd");
   wa.setBackgroundColor?.("#fdfdfd");
   wa.setBottomBarColor?.("#fdfdfd");
+}
+
+/**
+ * People who open the Mini App straight from a link (share links, the bot's Open button) never pressed
+ * Start, and Telegram won't let the bot message them: every alert would fail. If Telegram says the bot
+ * can't write to them yet, ask once ("Allow Meklit Jobs to message you?"). Not again for a week if they decline.
+ */
+export function askToAllowMessages(): void {
+  const wa = getWebApp();
+  if (!wa?.requestWriteAccess || !wa.isVersionAtLeast?.("6.9")) return;
+  if (wa.initDataUnsafe.user?.allows_write_to_pm) return;
+  try {
+    const at = Number(localStorage.getItem("wa:asked") ?? 0);
+    if (Date.now() - at < 7 * 24 * 3_600_000) return;
+    localStorage.setItem("wa:asked", String(Date.now()));
+  } catch {}
+  wa.requestWriteAccess();
 }

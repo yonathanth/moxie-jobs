@@ -94,7 +94,8 @@ export class UsersService {
     const dayStart = new Date(Date.UTC(eat.getUTCFullYear(), eat.getUTCMonth(), eat.getUTCDate()) - 3 * 3_600_000);
     const weekAgo = new Date(now.getTime() - 7 * 24 * 3_600_000);
     const [sentToday, sentThisWeek, lockedThisWeek, waitingToday] = await Promise.all([
-      this.prisma.delivery.count({ where: { userId, status: "sent", sentAt: { gte: dayStart } } }),
+      // Counts toward the free daily limit: new-job alerts, not the catch-up after setting preferences.
+      this.prisma.delivery.count({ where: { userId, status: "sent", mode: { not: "backfill" }, sentAt: { gte: dayStart } } }),
       this.prisma.delivery.count({ where: { userId, status: "sent", sentAt: { gte: weekAgo } } }),
       this.prisma.delivery.count({ where: { userId, status: { in: ["locked", "teased"] }, createdAt: { gte: weekAgo } } }),
       this.prisma.delivery.count({ where: { userId, status: "skipped", error: "daily_cap", createdAt: { gte: dayStart } } }),
