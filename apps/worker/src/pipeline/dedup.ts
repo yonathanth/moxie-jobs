@@ -83,6 +83,7 @@ const FILLABLE = [
   "deadlineRaw",
   "applyNotes",
   "applyPhone",
+  "roleBrief",
 ] as const;
 
 /**

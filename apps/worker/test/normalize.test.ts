@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractedJobSchema } from "../src/ai/schema";
-import { applyRank, chooseSourceUrl, isJobBoardUrl, jobSlug, normalizeJob } from "../src/pipeline/normalize";
+import { applyRank, chooseSourceUrl, isJobBoardUrl, jobSlug, normalizeJob, roleBriefOf } from "../src/pipeline/normalize";
 
 const taxonomy = {
   professionToFunction: new Map([
@@ -156,5 +156,14 @@ describe("employerType", () => {
     const rw = { ...source, id: "reliefweb" };
     expect(normalizeJob(job({ employer_type: null }), { source: rw, post, taxonomy, now: NOW })!.employerType).toBe("ngo");
     expect(normalizeJob(job({ employer_type: "foreign_company" }), { source: rw, post, taxonomy, now: NOW })!.employerType).toBe("foreign_company");
+  });
+});
+
+describe("roleBriefOf", () => {
+  it("keeps a clean verb phrase for previews", () => {
+    expect(roleBriefOf("To Design, develop and maintain web apps.")).toBe("design, develop and maintain web apps");
+    expect(roleBriefOf("  ")).toBeNull();
+    expect(roleBriefOf(null)).toBeNull();
+    expect(roleBriefOf("x".repeat(200))).toBeNull();
   });
 });

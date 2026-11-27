@@ -14,6 +14,7 @@ import {
   missedDigest,
   overLimitPreview,
   previewJobOf,
+  versionedCardUrl,
   employerLabel,
   isPremiumJob,
   locationText,
@@ -173,8 +174,8 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       {
         type: "photo",
         id: share.id.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 32),
-        photo_url: share.imageUrl,
-        thumbnail_url: share.imageUrl,
+        photo_url: versionedCardUrl(share.imageUrl, this.env.WEB_APP_URL),
+        thumbnail_url: versionedCardUrl(share.imageUrl, this.env.WEB_APP_URL),
         photo_width: 1200,
         photo_height: 630,
         caption: share.caption,
@@ -238,7 +239,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     try {
       let photo: string | InputFile | undefined = this.fileIds.get(imagePath);
       if (!photo) {
-        const res = await fetch(new URL(imagePath, this.env.WEB_APP_URL), { signal: AbortSignal.timeout(20_000) });
+        const res = await fetch(versionedCardUrl(imagePath, this.env.WEB_APP_URL), { signal: AbortSignal.timeout(20_000) });
         if (!res.ok) throw new Error(`card ${imagePath} → ${res.status}`);
         photo = new InputFile(Buffer.from(await res.arrayBuffer()), "card.jpg");
       }

@@ -85,6 +85,7 @@ export interface JobDraft {
   deadline: Date | null;
   deadlineRaw: string | null;
   summary: string;
+  roleBrief: string | null;
   skills: string[];
   requirements: string[];
   applyMethod: string;
@@ -227,6 +228,7 @@ export function normalizeJob(
     deadline,
     deadlineRaw: j.deadline?.raw?.slice(0, 200) ?? null,
     summary: summary.slice(0, 700),
+    roleBrief: roleBriefOf(j.role_brief),
     skills: [...new Set(j.skills.map((s) => s.trim()).filter(Boolean))].slice(0, 8),
     requirements: [...new Set(j.requirements.map((s) => s.trim().slice(0, 160)).filter(Boolean))].slice(0, 6),
     applyMethod,
@@ -251,4 +253,11 @@ export function jobSlug(title: string, company: string | null, id: string): stri
     .slice(0, 70)
     .replace(/-+$/, "");
   return `${base || "job"}-${id.replace(/-/g, "").slice(0, 6)}`;
+}
+
+/** "to design and maintain web apps." → "design and maintain web apps"; null when empty or too long to read as one line. */
+export function roleBriefOf(raw: string | null | undefined): string | null {
+  const t = raw?.trim().replace(/^to\s+/i, "").replace(/[.\s]+$/, "").replace(/\s+/g, " ");
+  if (!t || t.length < 8 || t.length > 180) return null;
+  return t.charAt(0).toLowerCase() + t.slice(1);
 }

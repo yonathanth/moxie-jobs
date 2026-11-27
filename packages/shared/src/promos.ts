@@ -115,6 +115,18 @@ export function renewPromo(plan: "pro" | "career", until: Date, lapsed: boolean)
 }
 
 /** Pictures for the main moments (the captions live with the bot copy). */
+/**
+ * Bump when the pictures change (a rename, a new look). Telegram keeps a picture it fetched by link (shares use
+ * photo_url) under that exact link, so a new version tag in the link makes it fetch the new picture.
+ */
+export const CARD_VERSION = "gursha1";
+
+/** A picture link with the version tag, for anything Telegram fetches or we upload. */
+export function versionedCardUrl(pathOrUrl: string, base: string): string {
+  const url = /^https?:\/\//.test(pathOrUrl) ? pathOrUrl : `${base.replace(/\/$/, "")}/${pathOrUrl.replace(/^\//, "")}`;
+  return `${url}${url.includes("?") ? "&" : "?"}v=${CARD_VERSION}`;
+}
+
 export const MOMENT_IMAGES = {
   welcome: "/og/msg/welcome",
   setup: "/og/msg/setup",

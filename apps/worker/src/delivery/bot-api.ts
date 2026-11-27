@@ -1,3 +1,4 @@
+import { versionedCardUrl } from "@ethio/shared";
 import { env } from "../env";
 
 /**
@@ -97,7 +98,7 @@ export async function sendPhoto(chatId: bigint, imagePath: string, caption: stri
     let form = new FormData();
     if (known) form.set("photo", known);
     else {
-      const img = await fetch(new URL(imagePath, env().WEB_APP_URL), { signal: AbortSignal.timeout(20_000) });
+      const img = await fetch(versionedCardUrl(imagePath, env().WEB_APP_URL), { signal: AbortSignal.timeout(20_000) });
       if (!img.ok) throw new Error(`card ${imagePath} → ${img.status}`);
       form.set("photo", new Blob([await img.arrayBuffer()], { type: "image/jpeg" }), "card.jpg");
     }

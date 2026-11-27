@@ -245,6 +245,8 @@ model Job {
   deadline        DateTime?
   deadlineRaw     String?
   summary         String
+  /// What the person will do, a verb phrase without the employer or requirements ("design and maintain web apps"), for free-plan previews (newer jobs only).
+  roleBrief       String?
   skills          String[]  @default([])
   /// Key requirements from the post, short plain-English phrases (newer jobs only).
   requirements    String[]  @default([])

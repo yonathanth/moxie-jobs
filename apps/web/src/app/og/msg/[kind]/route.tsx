@@ -333,18 +333,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
             width: "100%",
             height: "100%",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            gap: 6,
             background: `radial-gradient(circle at 50% 45%, #ffffff 0%, ${ACCENT_SOFT} 70%)`,
             fontFamily: "Geist",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element -- next/og */}
-          <img src={MOXIE_URI} width={230} height={230} alt="" />
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", fontSize: 92, fontWeight: 700, lineHeight: 0.98, letterSpacing: -3 }}>
-            <div style={{ display: "flex", color: INK }}>Gursha</div>
-            <div style={{ display: "flex", color: ACCENT }}>Jobs</div>
+          {/* Shown as a circle: the name big on top, then "with Moxie" small with Moxie herself at its right, bottom right of the name. */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", marginTop: -10 }}>
+            <div style={{ display: "flex", fontSize: 92, fontWeight: 700, lineHeight: 1, letterSpacing: -3 }}>
+              <div style={{ display: "flex", color: INK }}>Gursha</div>
+              <div style={{ display: "flex", color: ACCENT, marginLeft: 22 }}>Jobs</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", marginTop: 4 }}>
+              <div style={{ display: "flex", fontSize: 40, fontWeight: 400, color: HINT }}>with Moxie</div>
+              {/* eslint-disable-next-line @next/next/no-img-element -- next/og */}
+              <img src={MOXIE_URI} width={110} height={110} alt="" style={{ marginLeft: 6 }} />
+            </div>
           </div>
         </div>,
         { size: { width: 640, height: 640 }, png: true },
