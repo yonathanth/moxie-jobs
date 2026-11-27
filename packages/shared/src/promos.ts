@@ -38,7 +38,7 @@ export function upgradePromo(price: number): BotPhotoMessage {
       "",
       `From ${price} Br a month.`,
     ].join("\n"),
-    buttons: [[{ text: "Get Pro", path: "/app/plans" }]],
+    buttons: [[{ text: "Subscribe", path: "/app/plans" }]],
   };
 }
 
@@ -71,18 +71,21 @@ export function packsPromo(prices: Record<CvPackId, number>): BotPhotoMessage {
   };
 }
 
-/** Matches held back today by the free daily limit. */
-export function capPromo(waiting: number, dailyCap: number): BotPhotoMessage {
+/**
+ * Sent once, right after a free user's last full alert of the day (worker sender): they've reached the limit,
+ * new matches today open in the app tomorrow (each still gets a short preview), and Pro sends everything.
+ */
+export function limitReachedPromo(dailyCap: number): BotPhotoMessage {
   return {
-    image: `/og/msg/cap?n=${waiting}&cap=${dailyCap}`,
+    image: `/og/msg/cap?cap=${dailyCap}`,
     caption: [
-      `<b>${waiting} more ${waiting === 1 ? "job" : "jobs"} matched you today</b>`,
+      `<b>You've reached today's ${dailyCap} free jobs</b>`,
       "",
-      `You've had your ${dailyCap} free alerts today. The rest are waiting in your feed.`,
+      "New matches after this open in the app tomorrow. You'll still get a short preview of each one here.",
       "",
-      "Pro sends every match the moment it's posted, with no daily limit.",
+      "Subscribe to get every match in full, the moment it's posted.",
     ].join("\n"),
-    buttons: [[{ text: "Open my feed", path: "/app/jobs?scope=for_you" }, { text: "Get Pro", path: "/app/plans" }]],
+    buttons: [[{ text: "Subscribe", path: "/app/plans" }]],
   };
 }
 
@@ -97,9 +100,9 @@ export function premiumPromo(job: { id: string; title: string; kind: string | nu
       `<b>${esc(job.title)}</b>`,
       ...(meta ? [esc(meta)] : []),
       "",
-      "Pro shows the employer and how to apply, and sends jobs like this the moment they're posted.",
+      "Subscribe to see the employer and how to apply, and get jobs like this the moment they're posted.",
     ].join("\n"),
-    buttons: [[{ text: "See the job", path: `/app/jobs/${job.id}` }, { text: "Unlock with Pro", path: "/app/plans" }]],
+    buttons: [[{ text: "See the job", path: `/app/jobs/${job.id}` }, { text: "Subscribe to see details", path: "/app/plans" }]],
   };
 }
 

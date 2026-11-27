@@ -81,11 +81,11 @@ export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
           </div>
           <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[13px] text-hint">
             {held ? (
-              <span className="truncate">Over today&apos;s free limit: free tomorrow, or now with Pro</span>
+              <span className="truncate">Over today&apos;s free limit: opens tomorrow, or subscribe</span>
             ) : premiumLock ? (
               <>
                 <Building2 className="size-3.5 shrink-0" />
-                <span className="truncate">{job.employerLabel ?? "NGO or international employer"}: details with Pro</span>
+                <span className="truncate">{job.employerLabel ?? "NGO or international employer"}: subscribe to see details</span>
               </>
             ) : (
               <span className="truncate">{[job.company, job.employerLabel].filter(Boolean).join(" · ") || "Employer not stated"}</span>
@@ -132,7 +132,7 @@ export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
             onClick={() => paywall.gate("premium_job", { then: href })}
             className="ml-auto inline-flex h-9 items-center gap-0.5 rounded-lg px-2.5 text-[13px] font-semibold text-accent-strong hover:bg-accent-soft"
           >
-            Unlock with Pro
+            Subscribe to see details
             <ChevronRight className="size-4" />
           </button>
         ) : (

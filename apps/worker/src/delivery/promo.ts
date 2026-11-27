@@ -1,6 +1,6 @@
 import {
   CV_FAIR_USE_PER_MONTH,
-  capPromo,
+  limitReachedPromo,
   cvPromo,
   effectivePlan,
   employerLabel,
@@ -263,12 +263,8 @@ async function buildPromo(pick: { kind: PromoKind; ref?: string }, user: UserRow
       return cvPromo();
     case "packs":
       return packsPromo(resolveCvPackPrices(settings));
-    case "cap": {
-      const n = await prisma.delivery.count({
-        where: { userId: user.id, status: "skipped", error: "daily_cap", createdAt: { gte: startOfDayEat(new Date()) }, job: { status: "active" } },
-      });
-      return capPromo(n, resolveLimits("free", settings).dailyJobCap ?? 5);
-    }
+    case "cap":
+      return limitReachedPromo(resolveLimits("free", settings).dailyJobCap ?? 5);
     case "premium": {
       const job = pick.ref ? await prisma.job.findUnique({ where: { id: pick.ref } }) : null;
       if (!job || !isPremiumJob(job)) return null;

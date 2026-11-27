@@ -5,10 +5,10 @@ import { isUnpaidJob, locationText, salaryText, type JobFacts } from "./jobs";
 /**
  * Previews for matches the free plan doesn't send in full. Pure, so the copy is unit-tested.
  *   over the daily limit  → text: "New match: <title>", a sentence ("A company is hiring a part-time Accountant to …"),
- *                            place · deadline · salary, then one link and one button (Get Pro to see details)
+ *                            place · deadline · salary, then one link and one button (Subscribe to see details)
  *   NGO, international organization, embassy, international company, abroad → the same under a picture,
- *                            ending "NGO jobs are for Pro members." (the specific kind)
- *   every morning          → the jobs they missed yesterday (at most 10, title and employer) + See jobs / Get Pro
+ *                            ending "NGO jobs are for subscribers." (the specific kind)
+ *   every morning          → the jobs they missed yesterday (at most 10, title and employer) + See jobs / Subscribe
  * Never the employer's name, requirements, experience, education or how to apply. Never says "premium" to people.
  * The link in the text is a t.me deep link that opens the Mini App, so it works even where buttons don't show.
  */
@@ -49,7 +49,7 @@ const KIND_JOB: Record<Kind, string> = {
   overseas: "job abroad",
 };
 
-/** Who these jobs are for: "NGO jobs are for Pro members." */
+/** Who these jobs are for: "NGO jobs are for subscribers." */
 const KIND_JOBS: Record<Kind, string> = {
   ngo: "NGO jobs",
   international_org: "International organization jobs",
@@ -144,9 +144,9 @@ function body(job: PreviewJob, ending: string[]): string {
   return [`<b>New match: ${esc(job.title)}</b>`, "", esc(cut(previewSentence(job), 400)), ...(fact ? ["", fact] : []), "", ...ending].join("\n");
 }
 
-const proLine = (l: PreviewLinks) => `<b>${link(startApp(l, "plans"), "Subscribe to Pro")}</b> to see who's hiring and apply.`;
+const proLine = (l: PreviewLinks) => `<b>${link(startApp(l, "plans"), "Subscribe")}</b> to see who's hiring and apply.`;
 const proButton = (l: PreviewLinks): InlineButton[][] => {
-  const row = appButton(l, "Get Pro to see details", "/app/plans");
+  const row = appButton(l, "Subscribe to see details", "/app/plans");
   return row.length ? [row] : [];
 };
 
@@ -161,7 +161,7 @@ export function kindMatchPreview(
   l: PreviewLinks,
 ): { image: string; caption: string; buttons: InlineButton[][] } {
   const kind = kindOf(job);
-  const caption = body(job, [`${kind ? KIND_JOBS[kind] : "These jobs"} are for Pro members.`, proLine(l)]);
+  const caption = body(job, [`${kind ? KIND_JOBS[kind] : "These jobs"} are for subscribers.`, proLine(l)]);
   return { image: `/og/msg/premium?job=${job.id}`, caption, buttons: proButton(l) };
 }
 
@@ -186,7 +186,7 @@ export function missedDigest(jobs: MissedJob[], total: number, dailyCap: number 
   const foot = (more: number) => [
     ...(more > 0 ? [`…and ${more} more.`] : []),
     "",
-    `${link(startApp(l, "jobs"), "See them in the app")}, or ${link(startApp(l, "plans"), "get Pro")} to get every match the moment it's posted${dailyCap ? `, not just ${dailyCap} a day` : ""}.`,
+    `${link(startApp(l, "jobs"), "See them in the app")}, or ${link(startApp(l, "plans"), "subscribe")} to get every match the moment it's posted${dailyCap ? `, not just ${dailyCap} a day` : ""}.`,
   ];
   let shown = jobs.slice(0, MISSED_DIGEST_MAX);
   const build = () => {
@@ -198,6 +198,6 @@ export function missedDigest(jobs: MissedJob[], total: number, dailyCap: number 
     shown = shown.slice(0, -1);
     caption = build();
   }
-  const row = [...appButton(l, "See jobs", "/app/jobs?scope=for_you"), ...appButton(l, "Get Pro", "/app/plans")];
+  const row = [...appButton(l, "See jobs", "/app/jobs?scope=for_you"), ...appButton(l, "Subscribe", "/app/plans")];
   return { image: `/og/msg/missed?n=${Math.min(total, 999)}`, caption, buttons: row.length ? [row] : [] };
 }

@@ -121,7 +121,7 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
           </div>
           <div className="mt-4">
             <Button variant="accent" onClick={() => paywall.gate("premium_job")}>
-              Unlock with Pro
+              Subscribe to see details
             </Button>
           </div>
         </Card>
@@ -286,7 +286,7 @@ function HeldPanel({ onUpgrade }: { onUpgrade: () => void }) {
   const { me } = useSession();
   const [prompt, setPrompt] = useState(true);
   const cap = me.limits.dailyJobCap ?? 5;
-  const body = `You've seen today's ${cap} free jobs. This one opens for free tomorrow, or see the employer and how to apply now with Pro.`;
+  const body = `You've seen today's ${cap} free jobs. This one opens for free tomorrow, or subscribe to see the employer and how to apply now.`;
   const upgrade = () => {
     setPrompt(false);
     onUpgrade();
@@ -305,7 +305,7 @@ function HeldPanel({ onUpgrade }: { onUpgrade: () => void }) {
         </div>
         <div className="mt-4">
           <Button variant="accent" onClick={upgrade}>
-            See it now with Pro
+            Subscribe to see it now
           </Button>
         </div>
       </Card>
@@ -322,7 +322,7 @@ function HeldPanel({ onUpgrade }: { onUpgrade: () => void }) {
           body={body}
         >
           <Button variant="accent" onClick={upgrade}>
-            See it now with Pro
+            Subscribe to see it now
           </Button>
           <Button
             variant="secondary"

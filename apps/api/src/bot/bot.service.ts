@@ -18,6 +18,7 @@ import {
   employerLabel,
   isPremiumJob,
   locationText,
+  limitReachedPromo,
   packsPromo,
   premiumPromo,
   renewPromo,
@@ -310,6 +311,8 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     const inline = (buttons: InlineButton[][]) => (buttons.length ? { inline_keyboard: buttons as never } : undefined);
     if (job) {
       const over = overLimitPreview(previewJobOf(job), freeCap, links);
+      await label(++n, "Daily limit reached", `Free users, once a day, right after their ${freeCap}th full alert`);
+      await this.sendPhoto(chat, limitReachedPromo(freeCap).image, photo(limitReachedPromo(freeCap)));
       await label(++n, "Over today's limit", `Free users, each match after the first ${freeCap} of the day (job opens in the app tomorrow)`);
       await this.bot.api.sendMessage(chat, over.text, { parse_mode: "HTML", reply_markup: inline(over.buttons), link_preview_options: { is_disabled: true } });
     }

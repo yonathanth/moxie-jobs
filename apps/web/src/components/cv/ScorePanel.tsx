@@ -183,7 +183,7 @@ export function ScoreSheet(props: ScoreSheetProps) {
           <span className="block h-2 w-2/3 rounded-full bg-accent-border/60" />
         </span>
         <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-accent-strong">
-          <Crown className="size-3" /> Unlock with Pro or Career
+          <Crown className="size-3" /> Subscribe to unlock
         </span>
       </button>
     </li>

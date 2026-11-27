@@ -6,7 +6,8 @@ import { BotBlockedError, ChatNotFoundError, sendMessage, sendPhoto } from "./bo
 import { buildCard } from "./card";
 import { loadSettings } from "./matcher";
 import { loadTaxonomy } from "../pipeline/taxonomy";
-import { effectivePlan, kindMatchPreview, overLimitPreview, previewJobOf, resolveLimits, type PreviewLinks } from "@ethio/shared";
+import { effectivePlan, kindMatchPreview, limitReachedPromo, overLimitPreview, previewJobOf, resolveLimits, type PreviewLinks } from "@ethio/shared";
+import { toButtons } from "./promo";
 import { startOfDayEat } from "./schedule";
 
 const TICK_MS = 5_000;
@@ -147,9 +148,12 @@ export class Sender {
       const cards = [...catchUp, ...allowed];
       // Over the daily limit: a short preview (no employer, no how to apply); the job opens in the app tomorrow.
       const over = alerts.slice(allowed.length);
+      // This batch uses up the last of today's free alerts: say so once, with a picture and Subscribe.
+      const reachesLimit = limits.dailyJobCap !== null && budget > 0 && alerts.length >= budget;
 
       try {
         for (const d of cards) await this.sendCard(user.telegramId, d, jobsById.get(d.jobId)!, sources, fieldNames);
+        if (reachesLimit) await this.sendLimitReached(user.telegramId, limits.dailyJobCap ?? 5);
         for (const d of previews) await this.sendKindPreview(user.telegramId, d, jobsById.get(d.jobId)!);
         for (const d of over) await this.sendOverLimitPreview(user.telegramId, d, jobsById.get(d.jobId)!, limits.dailyJobCap ?? 5);
       } catch (err) {
@@ -190,7 +194,7 @@ export class Sender {
     await new Promise((r) => setTimeout(r, PER_CHAT_GAP_MS));
   }
 
-  /** A locked kind of job: picture preview with Get Pro to see details. Stays locked in the feed ("teased"). */
+  /** A locked kind of job: picture preview with Subscribe to see details. Stays locked in the feed ("teased"). */
   private async sendKindPreview(chatId: bigint, delivery: Claimed, job: Job) {
     const msg = kindMatchPreview({ ...previewJobOf(job), employerType: job.employerType, isOverseas: job.isOverseas }, previewLinks());
     const messageId = await sendPhoto(chatId, msg.image, msg.caption, { buttons: msg.buttons });
@@ -206,6 +210,14 @@ export class Sender {
       where: { id: delivery.id },
       data: { status: "skipped", error: "daily_cap", sentAt: new Date(), tgMessageId: BigInt(messageId) },
     });
+    await new Promise((r) => setTimeout(r, PER_CHAT_GAP_MS));
+  }
+
+  /** "You've reached today's 5 free jobs": the rest open in the app tomorrow; Subscribe. */
+  private async sendLimitReached(chatId: bigint, dailyCap: number) {
+    const m = limitReachedPromo(dailyCap);
+    const base = env().WEB_APP_URL.startsWith("https://") ? env().WEB_APP_URL : null;
+    await sendPhoto(chatId, m.image, m.caption, { buttons: base ? toButtons(m, base) : undefined });
     await new Promise((r) => setTimeout(r, PER_CHAT_GAP_MS));
   }
 

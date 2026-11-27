@@ -103,15 +103,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
       );
     }
 
+    // The free daily limit was just reached (sent once, after the last full alert of the day).
     case "cap": {
-      const n = int(q.get("n"), 1, 999, 3);
-      const cap = int(q.get("cap"), 1, 999, 10);
+      const cap = int(q.get("cap"), 1, 999, 5);
       return cardResponse(
-        <Frame badge={{ text: "Today" }} footer={{ note: "Pro sends every match, with no daily limit", cta: "Get Pro" }}>
+        <Frame badge={{ text: "Today" }} footer={{ note: "Subscribe to get every match, with no daily limit", cta: "Subscribe" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", flexDirection: "column" }}>
-              <Headline size={62} max={560}>{`${n} more ${n === 1 ? "job" : "jobs"} matched you`}</Headline>
-              <Sub max={540}>{`You've had your ${cap} free alerts today. The rest are waiting in your feed.`}</Sub>
+              <Headline size={62} max={560}>{`You've reached today's ${cap} free jobs`}</Headline>
+              <Sub max={540}>New matches after this open in the app tomorrow.</Sub>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {[0, 1, 2].map((i) => (
@@ -126,7 +126,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
     case "missed": {
       const n = int(q.get("n"), 1, 999, 3);
       return cardResponse(
-        <Frame badge={{ text: "Yesterday" }} footer={{ note: "Pro sends every match the moment it's posted", cta: "See jobs" }}>
+        <Frame badge={{ text: "Yesterday" }} footer={{ note: "Subscribe to get every match the moment it's posted", cta: "See jobs" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", flexDirection: "column" }}>
               <Headline size={62} max={560}>{`You missed ${n} matching ${n === 1 ? "job" : "jobs"}`}</Headline>
@@ -154,10 +154,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- next/og */}
                 <img src={ICONS.lock()} width={26} height={26} alt="" />
-                Pro shows the employer and how to apply
+                Subscribe to see the employer and how to apply
               </div>
             ),
-            cta: "Unlock with Pro",
+            cta: "Subscribe to see details",
           }}
         >
           <Headline size={title.length > 50 ? 54 : 64}>{title}</Headline>

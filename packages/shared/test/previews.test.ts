@@ -13,8 +13,8 @@ const job = {
   deadline: new Date("2026-12-05T09:00:00Z"),
   salary: "25,000 Br",
 };
-const proButton = [[{ text: "Get Pro to see details", web_app: { url: "https://jobs.example.app/app/plans" } }]];
-const proLink = `<b><a href="https://t.me/gurshajobsbot?startapp=plans">Subscribe to Pro</a></b> to see who's hiring and apply.`;
+const proButton = [[{ text: "Subscribe to see details", web_app: { url: "https://jobs.example.app/app/plans" } }]];
+const proLink = `<b><a href="https://t.me/gurshajobsbot?startapp=plans">Subscribe</a></b> to see who's hiring and apply.`;
 
 describe("previews", () => {
   it("names who is hiring without naming them, one kind at a time", () => {
@@ -50,10 +50,10 @@ describe("previews", () => {
     expect(p.buttons).toEqual(proButton);
   });
 
-  it("NGO and other kinds: the specific kind is for Pro members; never says premium", () => {
+  it("NGO and other kinds: the specific kind is for subscribers; never says premium", () => {
     const p = kindMatchPreview({ ...job, hirer: "An embassy", employerType: "embassy", isOverseas: false }, links);
     expect(p.caption).toContain("An embassy is hiring a part-time remote Junior Software Engineer");
-    expect(p.caption).toContain(`Embassy jobs are for Pro members.\n${proLink}`);
+    expect(p.caption).toContain(`Embassy jobs are for subscribers.\n${proLink}`);
     expect(p.caption.toLowerCase()).not.toContain("premium");
     expect(p.buttons).toEqual(proButton);
     expect(p.image).toBe("/og/msg/premium?job=j1");
@@ -73,7 +73,7 @@ describe("previews", () => {
     expect(d.caption.replace(/<[^>]+>/g, "").length).toBeLessThanOrEqual(1000);
     expect(d.caption).toMatch(/…and \d+ more\./);
     expect(d.caption).toContain("not just 5 a day");
-    expect(d.buttons[0]!.map((b) => b.text)).toEqual(["See jobs", "Get Pro"]);
+    expect(d.buttons[0]!.map((b) => b.text)).toEqual(["See jobs", "Subscribe"]);
     expect(d.image).toBe("/og/msg/missed?n=14");
     expect(missedDigest([], 0, 5, links)).toBeNull();
   });

@@ -10,7 +10,7 @@ import { previewLinks } from "./sender";
  * Every morning (settings.delivery.digestHourEat, default 8:00 Addis Ababa) each free user gets ONE picture
  * message listing the jobs that matched them yesterday but weren't sent in full: over the daily limit, or a
  * kind of job the plan doesn't include. At most 10 (title and employer; the kind of employer, never the name,
- * for jobs the plan locks), with See jobs | Get Pro. Still-open jobs only; nothing missed, nothing sent.
+ * for jobs the plan locks), with See jobs | Subscribe. Still-open jobs only; nothing missed, nothing sent.
  * UserPreferences.lastBatchAt records the last one (one per day).
  */
 

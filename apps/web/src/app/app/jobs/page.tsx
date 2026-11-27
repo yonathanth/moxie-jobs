@@ -371,7 +371,7 @@ function HeldMatches({ count, items, dailyCap, onUpgrade }: { count: number; ite
                 onUpgrade();
               }}
             >
-              See them now with Pro
+              Subscribe to see them now
             </Button>
           }
         >
