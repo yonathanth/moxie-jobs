@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "@ethio/db";
 import { applyPrompt, cvTailorPrompt, planPerks, sharedJob } from "../src/bot/bot.messages";
-import { decodeCursor, employerTypes, encodeCursor, pinAt, searchTerms, teaserOf, toCard, toPublic } from "../src/jobs/jobs.mapper";
+import { balanceTop, decodeCursor, employerTypes, encodeCursor, searchTerms, teaserOf, toCard, toPublic } from "../src/jobs/jobs.mapper";
 
 const job = (o: Partial<Job> = {}): Job =>
   ({
@@ -184,13 +184,20 @@ describe("saved and shared jobs", () => {
   });
 });
 
-describe("pinAt", () => {
+describe("balanceTop", () => {
+  // "P" = NGO / embassy / international job.
+  const isP = (x: string) => x.startsWith("P");
   const k = (x: string) => x;
-  it("puts pins 1st and 3rd and removes their old copies", () => {
-    expect(pinAt(["a", "b", "c", "L2", "d"], ["L1", "L2"], [0, 2], k)).toEqual(["L1", "a", "L2", "b", "c", "d"]);
+  it("keeps at most 2 in the top 5; the rest follow right after, in order", () => {
+    expect(balanceTop(["P1", "P2", "P3", "a", "b", "c", "d"], [], isP, k)).toEqual(["P1", "P2", "a", "b", "c", "P3", "d"]);
   });
-  it("copes with short pages and a single pin", () => {
-    expect(pinAt([], ["L1", "L2"], [0, 2], k)).toEqual(["L1", "L2"]);
-    expect(pinAt(["a"], ["L1"], [0, 2], k)).toEqual(["L1", "a"]);
+  it("brings one up when the top 5 has none: from further down, else from extras", () => {
+    expect(balanceTop(["a", "b", "c", "d", "e", "f", "P1"], [], isP, k)).toEqual(["a", "P1", "b", "c", "d", "e", "f"]);
+    expect(balanceTop(["a", "b", "c", "d", "e", "f"], ["P9"], isP, k)).toEqual(["a", "P9", "b", "c", "d", "e", "f"]);
+  });
+  it("leaves the list alone when the top 5 already has one or two, and copes with short pages", () => {
+    expect(balanceTop(["a", "P1", "b", "P2", "c", "d"], ["P9"], isP, k)).toEqual(["a", "P1", "b", "P2", "c", "d"]);
+    expect(balanceTop([], ["P9"], isP, k)).toEqual([]);
+    expect(balanceTop(["a"], [], isP, k)).toEqual(["a"]);
   });
 });

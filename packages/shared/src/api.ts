@@ -142,8 +142,6 @@ export interface JobCardDto {
   gender: string | null;
   deadline: string | null;
   firstSeenAt: string;
-  /** "For you" only: when it matched them (ISO), for the day labels. Absent on locked matches pinned to the top. */
-  matchedAt?: string;
   summary: string | null;
   skills: string[];
   /** Key requirements from the post (newer jobs; empty for older ones). */

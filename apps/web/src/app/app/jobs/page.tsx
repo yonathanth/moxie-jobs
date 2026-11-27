@@ -75,8 +75,8 @@ function Feed() {
   }, [feed.data]);
   const lockedCount = feed.data?.pages[0]?.lockedCount ?? 0;
   const held = state.scope === "for_you" ? feed.data?.pages[0]?.held : undefined;
-  // The list with a label above each day ("Today", "Yesterday", "Mon 24 Nov"). Saved jobs are in save order: no labels.
-  const rows = useMemo(() => (state.scope === "saved" ? items.map((job) => ({ kind: "job" as const, job })) : withDayLabels(items, state.scope === "for_you")), [items, state.scope]);
+  // All jobs: a label above each posting day ("Today", "Yesterday", "Mon 24 Nov"). For you and Saved have none.
+  const rows = useMemo(() => (state.scope === "all" ? withDayLabels(items) : items.map((job) => ({ kind: "job" as const, job }))), [items, state.scope]);
   // Just set up or edited preferences: the worker is still matching. Show that (not "no matches") and ask again.
   const matching = state.scope === "for_you" && !feed.isPlaceholderData && !!feed.data?.pages[0]?.matching;
   useEffect(() => {
@@ -231,7 +231,7 @@ function Feed() {
           />
         ) : (
           <div className={clsx("transition-opacity", feed.isPlaceholderData && "opacity-60")}>
-            {held && <HeldMatches count={held.count} items={held.items} onUpgrade={() => paywall.gate("daily_cap")} />}
+            {held && <HeldMatches count={held.count} items={held.items} dailyCap={me.limits.dailyJobCap ?? 5} onUpgrade={() => paywall.gate("daily_cap")} />}
             <div ref={listRef}>
             {matching && (
               <p className="mb-3 flex items-center justify-center gap-2 text-[13px] text-hint">
@@ -304,14 +304,12 @@ function dayLabel(day: number, today: number): string {
 }
 
 /**
- * Puts a day label before the first job of each day: the match day in "For you", the posting day in "All jobs".
- * Locked matches pinned to the top carry no match day; they take the day of the job after them.
+ * All jobs: a day label before the first job of each posting day. The top 5 are mixed (a few NGO and international
+ * jobs moved up), so a day gets its label only once.
  */
-function withDayLabels(items: JobCardDto[], byMatch: boolean): Row[] {
+function withDayLabels(items: JobCardDto[]): Row[] {
   const today = eatDay(new Date().toISOString());
-  const days: (number | null)[] = items.map((j) => (byMatch ? (j.matchedAt ? eatDay(j.matchedAt) : null) : eatDay(j.firstSeenAt)));
-  for (let i = days.length - 2; i >= 0; i--) if (days[i] === null) days[i] = days[i + 1] ?? null;
-  for (let i = 1; i < days.length; i++) if (days[i] === null) days[i] = days[i - 1] ?? null;
+  const days = items.map((j) => eatDay(j.firstSeenAt));
   const rows: Row[] = [];
   let current: number | null | undefined;
   items.forEach((job, i) => {
@@ -334,9 +332,9 @@ function DayLabel({ label, first }: { label: string; first: boolean }) {
  * Today's matches over the free limit: one row instead of a wall of locked cards. Tapping it opens them all in a
  * sheet over the feed; closing it goes back to the feed.
  */
-function HeldMatches({ count, items, onUpgrade }: { count: number; items: JobCardDto[]; onUpgrade: () => void }) {
+function HeldMatches({ count, items, dailyCap, onUpgrade }: { count: number; items: JobCardDto[]; dailyCap: number; onUpgrade: () => void }) {
   const [open, setOpen] = useState(false);
-  const title = `${count} more ${count === 1 ? "match" : "matches"} today`;
+  const title = `${count} ${count === 1 ? "job" : "jobs"} waiting for you`;
   return (
     <section className="mb-4 rounded-2xl border border-separator bg-surface">
       <button
@@ -352,7 +350,7 @@ function HeldMatches({ count, items, onUpgrade }: { count: number; items: JobCar
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-semibold">{title}</span>
-          <span className="block text-[13px] text-hint">{count === 1 ? "It opens" : "They open"} tomorrow, or now with Pro.</span>
+          <span className="block text-[13px] text-hint">You&apos;ve seen your {dailyCap} free jobs today. {count === 1 ? "This opens" : "These open"} tomorrow, or now with Pro.</span>
         </span>
         <ChevronRight className="size-5 shrink-0 text-hint" />
       </button>
@@ -377,7 +375,7 @@ function HeldMatches({ count, items, onUpgrade }: { count: number; items: JobCar
             </Button>
           }
         >
-          <p className="mb-3 text-[14px] text-hint">You&apos;ve had your free jobs for today. These open free tomorrow.</p>
+          <p className="mb-3 text-[14px] text-hint">You&apos;ve seen your {dailyCap} free jobs today. {count === 1 ? "This opens" : "These open"} tomorrow, or now with Pro.</p>
           <div className="flex flex-col gap-3 pb-2">
             {items.map((job) => (
               <JobCard key={job.id} job={job} />

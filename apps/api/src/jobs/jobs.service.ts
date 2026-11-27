@@ -1,12 +1,12 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Job, Prisma, User } from "@ethio/db";
-import { effectivePlan, employerLabel, isPremiumJob, locationText, resolveLimits, startOfDayEat, type JobCardDto, type JobFeedPage, type JobFeedQuery, type PostedWithin, type PublicJobDto } from "@ethio/shared";
+import { EMPLOYER_TYPES, effectivePlan, employerLabel, isPremiumJob, locationText, resolveLimits, startOfDayEat, type JobCardDto, type JobFeedPage, type JobFeedQuery, type PostedWithin, type PublicJobDto } from "@ethio/shared";
 import { BotService } from "../bot/bot.service";
 import { jobShareCaption } from "../bot/bot.messages";
 import { ENV, type Env } from "../config/config.module";
 import { PrismaService } from "../prisma/prisma.service";
 import { SettingsService } from "../settings/settings.service";
-import { decodeCursor, employerTypes, encodeCursor, pinAt, searchTerms, toCard, toPublic } from "./jobs.mapper";
+import { balanceTop, decodeCursor, employerTypes, encodeCursor, searchTerms, toCard, toPublic } from "./jobs.mapper";
 
 const DAY = 24 * 3_600_000;
 const POSTED_MS: Record<PostedWithin, number> = { "1d": DAY, "3d": 3 * DAY, "7d": 7 * DAY, "30d": 30 * DAY };
@@ -24,6 +24,10 @@ const FOR_YOU: Prisma.DeliveryWhereInput = {
 };
 /** Matching after a preferences save normally takes seconds; past this, stop showing "finding matches". */
 const MATCHING_MAX_MS = 2 * 60_000;
+/** NGO, international organization, embassy, foreign company or abroad (`isPremiumJob`), as a job filter. */
+const PREMIUM_JOB: Prisma.JobWhereInput = {
+  OR: [{ employerType: { in: EMPLOYER_TYPES.filter((e) => e.premium).map((e) => e.id) } }, { isOverseas: true }],
+};
 /** Today's held matches, all shown in the "N more matches today" sheet (a free day rarely holds more than a few dozen). */
 const HELD_SHOWN = 200;
 const LOOKUP_TTL_MS = 10 * 60_000;
@@ -153,17 +157,22 @@ export class JobsService {
       });
       let page = rows.slice(0, limit);
       const last = rows[limit - 1];
-      const pinned = new Set<string>();
-      // Plans without premium jobs: show what they're missing near the top (1st and 3rd), first page only.
-      if (!cursor && !premiumJobs) {
-        const locked = await this.prisma.delivery.findMany({
-          where: { userId: user.id, status: { in: ["locked", "teased"] }, job: this.jobWhere(q, now, excludeUnpaid) },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-          take: 2,
-          include: { job: true },
-        });
-        page = pinAt(page, locked, [0, 2], (d) => d.id);
-        for (const d of locked) pinned.add(d.id);
+      // First page: at most 2 NGO/embassy/international jobs in the top 5, and at least one when they have one.
+      if (!cursor) {
+        const extra = page.slice(0, 5).some((d) => isPremiumJob(d.job))
+          ? []
+          : await this.prisma.delivery.findMany({
+              where: {
+                userId: user.id,
+                job: { AND: [this.jobWhere(q, now, excludeUnpaid), PREMIUM_JOB] },
+                ...(heldToday ? { NOT: heldToday } : {}),
+                AND: [FOR_YOU],
+              },
+              orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+              take: 1,
+              include: { job: true },
+            });
+        page = balanceTop(page, extra, (d) => isPremiumJob(d.job), (d) => d.jobId);
       }
       const where = { userId: user.id, job: this.jobWhere(q, now, excludeUnpaid) };
       const [held, heldCount] =
@@ -177,13 +186,10 @@ export class JobsService {
         this.savedSet(user.id, [...page, ...held].map((d) => d.jobId)),
         cursor ? false : this.stillMatching(user.id, now),
       ]);
-      const matchCard = (d: (typeof page)[number], dated: boolean) => ({
-        ...card(d.job, matchOf(d, heldFrom), saved.has(d.jobId)),
-        ...(dated ? { matchedAt: d.createdAt.toISOString() } : {}),
-      });
+      const matchCard = (d: (typeof page)[number]) => card(d.job, matchOf(d, heldFrom), saved.has(d.jobId));
       return {
-        items: page.map((d) => matchCard(d, !pinned.has(d.id))),
-        ...(heldCount ? { held: { count: heldCount, items: held.map((d) => matchCard(d, true)) } } : {}),
+        items: page.map(matchCard),
+        ...(heldCount ? { held: { count: heldCount, items: held.map(matchCard) } } : {}),
         nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
         ...(matching ? { matching } : {}),
         ...(cursor || premiumJobs
@@ -209,10 +215,21 @@ export class JobsService {
       orderBy: [{ firstSeenAt: "desc" }, { id: "desc" }],
       take: limit + 1,
     });
-    const page = jobs.slice(0, limit);
+    let page = jobs.slice(0, limit);
+    const last = page[page.length - 1]; // before reordering: the cursor follows the sort order
+    // First page: at most 2 NGO/embassy/international jobs in the top 5, and at least one when there is one.
+    if (!cursor) {
+      const extra = page.slice(0, 5).some(isPremiumJob)
+        ? []
+        : await this.prisma.job.findMany({
+            where: { AND: [this.jobWhere(q, now, excludeUnpaid), ...(similar ? [similar] : []), { firstSeenAt: { gte: new Date(now.getTime() - ALL_JOBS_WINDOW_MS) } }, PREMIUM_JOB] },
+            orderBy: [{ firstSeenAt: "desc" }, { id: "desc" }],
+            take: 1,
+          });
+      page = balanceTop(page, extra, isPremiumJob, (j) => j.id);
+    }
     const ids = page.map((j) => j.id);
     const [delivered, saved] = await Promise.all([this.matchesFor(user.id, ids, heldFrom), this.savedSet(user.id, ids)]);
-    const last = page[page.length - 1];
     return {
       items: page.map((j) => card(j, delivered.get(j.id) ?? null, saved.has(j.id))),
       nextCursor: jobs.length > limit && last ? encodeCursor(last.firstSeenAt, last.id) : null,

@@ -123,14 +123,30 @@ export function toPublic(job: Job, now = new Date()): PublicJobDto {
 }
 
 /**
- * Moves `pins` to the given positions (in order), removing them from wherever they were in `items`.
- * Positions past the end append. Used to show locked premium matches 1st and 3rd.
+ * The first page's top `n` (5): at most `max` (2) NGO/embassy/international jobs, and at least one when there is
+ * one, first from further down the page, else from `extras` (fetched for this). Everything else keeps its order,
+ * and jobs pushed out of the top follow right after it.
  */
-export function pinAt<T>(items: T[], pins: T[], positions: number[], key: (t: T) => string): T[] {
-  const pinned = new Set(pins.map(key));
-  const out = items.filter((i) => !pinned.has(key(i)));
-  pins.slice(0, positions.length).forEach((p, i) => out.splice(Math.min(positions[i]!, out.length), 0, p));
-  return out;
+export function balanceTop<T>(items: T[], extras: T[], isPremium: (t: T) => boolean, key: (t: T) => string, n = 5, max = 2): T[] {
+  const top: T[] = [];
+  const rest: T[] = [];
+  let premium = 0;
+  for (const item of items) {
+    if (top.length < n && !(isPremium(item) && premium >= max)) {
+      top.push(item);
+      if (isPremium(item)) premium++;
+    } else rest.push(item);
+  }
+  if (premium === 0 && top.length > 0) {
+    const seen = new Set(items.map(key));
+    const fromRest = rest.findIndex(isPremium);
+    const pick = fromRest >= 0 ? rest.splice(fromRest, 1)[0] : extras.find((e) => isPremium(e) && !seen.has(key(e)));
+    if (pick) {
+      top.splice(Math.min(1, top.length), 0, pick);
+      if (top.length > n) rest.unshift(top.pop()!);
+    }
+  }
+  return [...top, ...rest];
 }
 
 /** Keyset cursor: (sort time, id), newest first. Opaque base64url to the client. */
