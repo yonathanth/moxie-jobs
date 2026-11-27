@@ -42,7 +42,7 @@ const schema = z
     /** API base URL (click-tracking redirect /r/:deliveryId; used only when https). */
     PUBLIC_API_URL: z.url().default("http://localhost:4000"),
 
-    FETCH_USER_AGENT: z.string().default("MeklitJobsBot/1.0 (+https://jobs.gomoxie.app)"),
+    FETCH_USER_AGENT: z.string().default("GurshaJobsBot/1.0 (+https://jobs.gomoxie.app)"),
 
     /** Website sources (ReliefWeb API, African Union sitemap). */
     WEB_SOURCES_ENABLED: bool.default(true),

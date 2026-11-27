@@ -8,7 +8,7 @@ import { ZodValidationPipe } from "../common/zod-validation.pipe";
 
 const shareAppSchema = z.object({ kind: z.enum(SHARE_APP_KINDS) }).strict();
 
-/** "Share Meklit Jobs" (Profile): prepares the chosen picture message for WebApp.shareMessage. */
+/** "Share Gursha Jobs" (Profile): prepares the chosen picture message for WebApp.shareMessage. */
 @Controller("share")
 @UseGuards(AuthGuard)
 export class ShareController {

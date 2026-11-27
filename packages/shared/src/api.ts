@@ -142,6 +142,8 @@ export interface JobCardDto {
   gender: string | null;
   deadline: string | null;
   firstSeenAt: string;
+  /** "For you" only: when it matched them (ISO), for the day labels. Absent on locked matches pinned to the top. */
+  matchedAt?: string;
   summary: string | null;
   skills: string[];
   /** Key requirements from the post (newer jobs; empty for older ones). */
@@ -199,6 +201,8 @@ export interface JobFeedPage {
   lockedCount?: number;
   /** "For you", first page: the worker is still matching their latest preferences (just set up or edited). Poll until false. */
   matching?: boolean;
+  /** "For you", first page, plans with a daily limit: today's matches over the limit (they open tomorrow), kept out of the list and shown as one row. */
+  held?: { count: number; items: JobCardDto[] };
 }
 
 /** A shared job link (public, no sign-in): enough to want it; applying happens in the bot. */

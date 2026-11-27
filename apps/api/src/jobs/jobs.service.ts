@@ -24,6 +24,8 @@ const FOR_YOU: Prisma.DeliveryWhereInput = {
 };
 /** Matching after a preferences save normally takes seconds; past this, stop showing "finding matches". */
 const MATCHING_MAX_MS = 2 * 60_000;
+/** Today's held matches listed under the "N more matches today" row (the rest are counted). */
+const HELD_SHOWN = 30;
 const LOOKUP_TTL_MS = 10 * 60_000;
 
 /**
@@ -136,10 +138,13 @@ export class JobsService {
     }
 
     if (q.scope === "for_you") {
+      // Today's matches over the free limit stay out of the list: one "N more matches today" row holds them.
+      const heldToday: Prisma.DeliveryWhereInput | null = heldFrom ? { status: "skipped", error: "daily_cap", createdAt: { gte: heldFrom } } : null;
       const rows = await this.prisma.delivery.findMany({
         where: {
           userId: user.id,
           job: this.jobWhere(q, now, excludeUnpaid),
+          ...(heldToday ? { NOT: heldToday } : {}),
           AND: [FOR_YOU, ...(cursor ? [{ OR: [{ createdAt: { lt: cursor.at } }, { createdAt: cursor.at, id: { lt: cursor.id } }] }] : [])],
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -148,6 +153,7 @@ export class JobsService {
       });
       let page = rows.slice(0, limit);
       const last = rows[limit - 1];
+      const pinned = new Set<string>();
       // Plans without premium jobs: show what they're missing near the top (1st and 3rd), first page only.
       if (!cursor && !premiumJobs) {
         const locked = await this.prisma.delivery.findMany({
@@ -157,10 +163,27 @@ export class JobsService {
           include: { job: true },
         });
         page = pinAt(page, locked, [0, 2], (d) => d.id);
+        for (const d of locked) pinned.add(d.id);
       }
-      const [saved, matching] = await Promise.all([this.savedSet(user.id, page.map((d) => d.jobId)), cursor ? false : this.stillMatching(user.id, now)]);
+      const where = { userId: user.id, job: this.jobWhere(q, now, excludeUnpaid) };
+      const [held, heldCount] =
+        heldToday && !cursor
+          ? await Promise.all([
+              this.prisma.delivery.findMany({ where: { ...where, ...heldToday }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: HELD_SHOWN, include: { job: true } }),
+              this.prisma.delivery.count({ where: { ...where, ...heldToday } }),
+            ])
+          : [[], 0];
+      const [saved, matching] = await Promise.all([
+        this.savedSet(user.id, [...page, ...held].map((d) => d.jobId)),
+        cursor ? false : this.stillMatching(user.id, now),
+      ]);
+      const matchCard = (d: (typeof page)[number], dated: boolean) => ({
+        ...card(d.job, matchOf(d, heldFrom), saved.has(d.jobId)),
+        ...(dated ? { matchedAt: d.createdAt.toISOString() } : {}),
+      });
       return {
-        items: page.map((d) => card(d.job, matchOf(d, heldFrom), saved.has(d.jobId))),
+        items: page.map((d) => matchCard(d, !pinned.has(d.id))),
+        ...(heldCount ? { held: { count: heldCount, items: held.map((d) => matchCard(d, true)) } } : {}),
         nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
         ...(matching ? { matching } : {}),
         ...(cursor || premiumJobs

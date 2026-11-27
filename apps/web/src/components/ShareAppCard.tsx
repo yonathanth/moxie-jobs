@@ -9,13 +9,13 @@ import { shareApp } from "@/lib/share";
 import { haptic } from "@/lib/telegram";
 
 /**
- * Profile → "Share Meklit Jobs": pick what the share is about, so it lands with
+ * Profile → "Share Gursha Jobs": pick what the share is about, so it lands with
  * the right person. Each sends a picture message whose button opens that place
  * in the Mini App (see SHARE_APP_MESSAGES / START_APP_ROUTES in @ethio/shared).
  */
 
 const OPTIONS: { kind: ShareAppKind; icon: LucideIcon; tone: IconTone; title: string; body: string }[] = [
-  { kind: "general", icon: Megaphone, tone: "accent", title: "Meklit Jobs in general", body: "Jobs that fit you, plus a CV for every job" },
+  { kind: "general", icon: Megaphone, tone: "accent", title: "Gursha Jobs in general", body: "Jobs that fit you, plus a CV for every job" },
   { kind: "jobs", icon: Search, tone: "sky", title: "Find jobs that fit you", body: "For someone looking for work" },
   { kind: "cv_create", icon: FilePlus2, tone: "emerald", title: "Create a CV", body: "For someone without a CV yet" },
   { kind: "cv_improve", icon: Upload, tone: "violet", title: "Improve a CV", body: "For someone whose CV needs work" },
@@ -46,7 +46,7 @@ export function ShareAppCard() {
             <Send className="size-5" />
           </IconTile>
           <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-semibold">Share Meklit Jobs</p>
+            <p className="text-[15px] font-semibold">Share Gursha Jobs</p>
             <p className="text-[13px] text-hint">Help a friend find a job or make a CV</p>
           </div>
           <ChevronRight className="size-4 text-hint-light" />

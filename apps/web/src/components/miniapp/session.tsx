@@ -132,7 +132,7 @@ export function SessionGate({ scriptReady, children }: { scriptReady: boolean; c
       return goStart ? <ScreenSkeleton variant={skeletonFor((startTarget ?? "").split("?")[0] ?? "")} /> : <RouteSkeleton />;
     case "outside-telegram":
       return (
-        <CenteredMessage title="Open this in Telegram" body="Meklit Jobs runs inside Telegram. Open the bot to continue.">
+        <CenteredMessage title="Open this in Telegram" body="Gursha Jobs runs inside Telegram. Open the bot to continue.">
           <a
             href={BOT_URL}
             className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-ink px-5 font-semibold text-white"

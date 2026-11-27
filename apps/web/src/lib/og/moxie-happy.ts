@@ -1,7 +1,7 @@
 import { MOXIE_SVG } from "./moxie-art.generated";
 
 /**
- * Moxie for Meklit Jobs' pictures: glasses on, a folder of CVs in her small
+ * Moxie for Gursha Jobs' pictures: glasses on, a folder of CVs in her small
  * claw, a big happy smile, looking straight at you. Made from GoMoxie's
  * resting artwork (moxie-art.generated.ts, which has every prop hidden) by
  * showing and hiding its parts, so it stays in step with her real drawing.

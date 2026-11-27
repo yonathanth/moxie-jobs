@@ -13,6 +13,7 @@ import {
   kindMatchPreview,
   missedDigest,
   overLimitPreview,
+  previewJobOf,
   employerLabel,
   isPremiumJob,
   locationText,
@@ -150,7 +151,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     });
   }
 
-  /** "Share Meklit Jobs": a picture about one thing the app does, its button opening that place in the Mini App. */
+  /** "Share Gursha Jobs": a picture about one thing the app does, its button opening that place in the Mini App. */
   async prepareAppShare(user: Pick<User, "telegramId">, kind: ShareAppKind): Promise<string> {
     const m = SHARE_APP_MESSAGES[kind];
     const bot = `https://t.me/${this.env.TELEGRAM_BOT_USERNAME}`;
@@ -307,13 +308,13 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     const links: PreviewLinks = { app: web, bot: `https://t.me/${this.env.TELEGRAM_BOT_USERNAME}` };
     const inline = (buttons: InlineButton[][]) => (buttons.length ? { inline_keyboard: buttons as never } : undefined);
     if (job) {
-      const over = overLimitPreview({ id: job.id, title: job.title, employerLabel: employerLabel(job.employerType), location: locationText(job), deadline: job.deadline }, freeCap, links);
+      const over = overLimitPreview(previewJobOf(job), freeCap, links);
       await label(++n, "Over today's limit", `Free users, each match after the first ${freeCap} of the day (job opens in the app tomorrow)`);
       await this.bot.api.sendMessage(chat, over.text, { parse_mode: "HTML", reply_markup: inline(over.buttons), link_preview_options: { is_disabled: true } });
     }
     if (premium) {
       const p = kindMatchPreview(
-        { id: premium.id, title: premium.title, employerLabel: employerLabel(premium.employerType), location: locationText(premium), deadline: premium.deadline, employerType: premium.employerType, isOverseas: premium.isOverseas },
+        { ...previewJobOf(premium), employerType: premium.employerType, isOverseas: premium.isOverseas },
         links,
       );
       await label(++n, "NGO / embassy / abroad match", "Free users, the moment such a job matches (employer hidden)");
@@ -473,7 +474,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     // Inline mode is on for the Mini App's share pictures. Someone typing @bot in a chat gets
     // no results, just a button into the bot (instead of an endless spinner).
     this.bot.on("inline_query", (ctx) =>
-      ctx.answerInlineQuery([], { cache_time: 3600, is_personal: false, button: { text: "Open Meklit Jobs", start_parameter: "inline" } }),
+      ctx.answerInlineQuery([], { cache_time: 3600, is_personal: false, button: { text: "Open Gursha Jobs", start_parameter: "inline" } }),
     );
 
     this.bot.on("my_chat_member", async (ctx) => {

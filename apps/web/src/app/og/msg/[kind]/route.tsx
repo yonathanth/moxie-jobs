@@ -241,7 +241,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
       );
     }
 
-    // "Share Meklit Jobs" pictures (jobs, improve, international); general and create reuse welcome and cv.
+    // "Share Gursha Jobs" pictures (jobs, improve, international); general and create reuse welcome and cv.
     case "jobs":
       return cardResponse(
         <Frame footer={{ note: "Free on Telegram", cta: "Find jobs for me" }}>
@@ -343,7 +343,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
           {/* eslint-disable-next-line @next/next/no-img-element -- next/og */}
           <img src={MOXIE_URI} width={230} height={230} alt="" />
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", fontSize: 92, fontWeight: 700, lineHeight: 0.98, letterSpacing: -3 }}>
-            <div style={{ display: "flex", color: INK }}>Meklit</div>
+            <div style={{ display: "flex", color: INK }}>Gursha</div>
             <div style={{ display: "flex", color: ACCENT }}>Jobs</div>
           </div>
         </div>,

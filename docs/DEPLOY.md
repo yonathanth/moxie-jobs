@@ -1,4 +1,4 @@
-# Deploying Meklit Jobs (server names keep the moxie-jobs prefix)
+# Deploying Gursha Jobs (server names keep the moxie-jobs prefix)
 
 Same route as GoMoxie: a push to `main` runs `.github/workflows/main.yml`, which SSHes into the VPS,
 fetches the code into `~/apps/moxie-jobs`, builds it, applies migrations and restarts pm2

@@ -7,7 +7,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: "Meklit Jobs: jobs in Ethiopia that fit you", template: "%s · Meklit Jobs" },
+  title: { default: "Gursha Jobs: jobs in Ethiopia that fit you", template: "%s · Gursha Jobs" },
   description:
     "New jobs from Ethiopia's job channels and websites, matched to your profession and sent to you on Telegram.",
 };

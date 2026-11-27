@@ -8,7 +8,7 @@ import { MOXIE_HAPPY_SVG } from "./moxie-happy";
 
 /**
  * Building blocks for the pictures the bot sends (and link previews): 1200×630,
- * the Meklit Jobs look (warm white, near-black type, orange accent, GoMoxie's
+ * the Gursha Jobs look (warm white, near-black type, orange accent, GoMoxie's
  * logo). next/og (satori) draws them; every div with several children is flex.
  */
 

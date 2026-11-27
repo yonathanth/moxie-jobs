@@ -3,7 +3,7 @@ import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 /** Bot copy and keyboards. Pure (no I/O) so it is easy to test and edit. */
 
 export const BOT_COMMANDS = [
-  { command: "start", description: "Start / open Meklit Jobs" },
+  { command: "start", description: "Start / open Gursha Jobs" },
   { command: "jobs", description: "Open my job feed" },
   { command: "settings", description: "Edit what jobs I get" },
   { command: "pause", description: "Pause job alerts" },
@@ -87,7 +87,7 @@ export function needsOnboarding(webAppUrl: string): Reply {
 
 /** Shown in the empty chat before /start ("What can this bot do?"), under the BotFather picture. Max 512 characters. */
 export const BOT_DESCRIPTION =
-  "Meklit Jobs sends you jobs in Ethiopia that fit you, the moment they're posted.\n\n" +
+  "Gursha Jobs sends you jobs in Ethiopia that fit you, the moment they're posted.\n\n" +
   "• Matched jobs from Ethiopia's job channels and websites, in one place\n" +
   "• Create a strong CV, or improve the one you have\n" +
   "• A CV tailored to every job you apply for\n\n" +
@@ -100,7 +100,7 @@ export const PAUSED_TEXT = "Job alerts paused. Send /resume whenever you want th
 export const RESUMED_TEXT = "Job alerts are back on.";
 
 export const HELP_TEXT =
-  "<b>How Meklit Jobs works</b>\n\n" +
+  "<b>How Gursha Jobs works</b>\n\n" +
   "1. Tell me your profession, field of study, experience and where you want to work.\n\n" +
   "2. I collect new jobs from Ethiopian job channels and websites around the clock.\n\n" +
   "3. When a job fits you, I send it here with a button to apply.\n\n" +
@@ -195,6 +195,6 @@ export function jobShareCaption(job: { title: string; who: string | null; locati
   if (job.who) lines.push(escapeHtml(job.who));
   const meta = [job.location, job.deadline ? `apply by ${job.deadline.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Addis_Ababa" })}` : null].filter(Boolean);
   if (meta.length) lines.push(escapeHtml(meta.join(" · ")));
-  lines.push("", `Get more jobs like this on <a href="${escapeHtml(botUrl)}?start=src_share">Meklit Jobs</a>`);
+  lines.push("", `Get more jobs like this on <a href="${escapeHtml(botUrl)}?start=src_share">Gursha Jobs</a>`);
   return lines.join("\n");
 }

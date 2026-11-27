@@ -136,7 +136,7 @@ export function setupReminderText(firstName: string | null): string {
 }
 
 
-/** "Share Meklit Jobs" (Profile): one message per purpose, each a picture with a button into the right place. */
+/** "Share Gursha Jobs" (Profile): one message per purpose, each a picture with a button into the right place. */
 export const SHARE_APP_KINDS = ["general", "jobs", "cv_create", "cv_improve", "premium"] as const;
 export type ShareAppKind = (typeof SHARE_APP_KINDS)[number];
 
@@ -161,13 +161,13 @@ export const SHARE_APP_MESSAGES: Record<ShareAppKind, ShareAppMessage> = {
   general: {
     image: "/og/msg/welcome",
     caption:
-      "<b>Meklit Jobs: jobs in Ethiopia that fit you</b>\n\nGet matching jobs the moment they're posted, and a CV made for every job you apply to. Free on Telegram.",
-    button: "Open Meklit Jobs",
+      "<b>Gursha Jobs: jobs in Ethiopia that fit you</b>\n\nGet matching jobs the moment they're posted, and a CV made for every job you apply to. Free on Telegram.",
+    button: "Open Gursha Jobs",
   },
   jobs: {
     image: "/og/msg/jobs",
     caption:
-      "<b>Get jobs that fit you, the moment they're posted</b>\n\nTell it the jobs you want once. Meklit Jobs checks Ethiopia's job channels and websites and sends you every match.",
+      "<b>Get jobs that fit you, the moment they're posted</b>\n\nTell it the jobs you want once. Gursha Jobs checks Ethiopia's job channels and websites and sends you every match.",
     button: "Find jobs for me",
   },
   cv_create: {

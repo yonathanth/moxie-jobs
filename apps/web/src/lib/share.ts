@@ -60,7 +60,7 @@ export async function shareJob(job: ShareableJob, token?: string): Promise<"shar
 }
 
 /**
- * "Share Meklit Jobs": in Telegram 8.0+, a picture message about one thing the app does (its button opens that
+ * "Share Gursha Jobs": in Telegram 8.0+, a picture message about one thing the app does (its button opens that
  * place in the Mini App). Otherwise the bot link with a line of text.
  */
 export async function shareApp(kind: ShareAppKind, token: string): Promise<"shared" | "copied" | "failed"> {

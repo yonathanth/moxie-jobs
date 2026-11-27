@@ -6,7 +6,7 @@ import { BotBlockedError, ChatNotFoundError, sendMessage, sendPhoto } from "./bo
 import { buildCard } from "./card";
 import { loadSettings } from "./matcher";
 import { loadTaxonomy } from "../pipeline/taxonomy";
-import { effectivePlan, employerLabel, kindMatchPreview, locationText, overLimitPreview, resolveLimits, type PreviewJob, type PreviewLinks } from "@ethio/shared";
+import { effectivePlan, kindMatchPreview, overLimitPreview, previewJobOf, resolveLimits, type PreviewLinks } from "@ethio/shared";
 import { startOfDayEat } from "./schedule";
 
 const TICK_MS = 5_000;
@@ -22,16 +22,6 @@ export function previewLinks(): PreviewLinks {
   };
 }
 
-/** What a preview may show: never the employer's name or how to apply. */
-export function previewJob(job: Job): PreviewJob {
-  return {
-    id: job.id,
-    title: job.title,
-    employerLabel: employerLabel(job.employerType) ?? (job.isOverseas ? "Abroad" : null),
-    location: locationText(job),
-    deadline: job.deadline,
-  };
-}
 
 interface Claimed {
   id: string;
@@ -160,8 +150,8 @@ export class Sender {
 
       try {
         for (const d of cards) await this.sendCard(user.telegramId, d, jobsById.get(d.jobId)!, sources, fieldNames);
-        for (const d of previews) await this.sendKindPreview(user.telegramId, d, jobsById.get(d.jobId)!);
-        for (const d of over) await this.sendOverLimitPreview(user.telegramId, d, jobsById.get(d.jobId)!, limits.dailyJobCap ?? 5);
+        for (const d of previews) await this.sendKindPreview(user.telegramId, d, jobsById.get(d.jobId)!, fieldNames);
+        for (const d of over) await this.sendOverLimitPreview(user.telegramId, d, jobsById.get(d.jobId)!, limits.dailyJobCap ?? 5, fieldNames);
       } catch (err) {
         if (err instanceof BotBlockedError) {
           await prisma.user.update({ where: { id: userId }, data: { botBlockedAt: new Date() } });
@@ -200,17 +190,17 @@ export class Sender {
     await new Promise((r) => setTimeout(r, PER_CHAT_GAP_MS));
   }
 
-  /** A locked kind of job: picture preview with See job / Get Pro. Stays locked in the feed ("teased"). */
-  private async sendKindPreview(chatId: bigint, delivery: Claimed, job: Job) {
-    const msg = kindMatchPreview({ ...previewJob(job), employerType: job.employerType, isOverseas: job.isOverseas }, previewLinks());
+  /** A locked kind of job: picture preview with Get Pro to see details. Stays locked in the feed ("teased"). */
+  private async sendKindPreview(chatId: bigint, delivery: Claimed, job: Job, fieldNames: Map<string, string>) {
+    const msg = kindMatchPreview({ ...previewJobOf(job, fieldNames), employerType: job.employerType, isOverseas: job.isOverseas }, previewLinks());
     const messageId = await sendPhoto(chatId, msg.image, msg.caption, { buttons: msg.buttons });
     await prisma.delivery.update({ where: { id: delivery.id }, data: { status: "teased", sentAt: new Date(), tgMessageId: BigInt(messageId) } });
     await new Promise((r) => setTimeout(r, PER_CHAT_GAP_MS));
   }
 
   /** Over today's free limit: a text preview. Recorded as skipped/daily_cap (the feed's "opens tomorrow"), with the message id. */
-  private async sendOverLimitPreview(chatId: bigint, delivery: Claimed, job: Job, dailyCap: number) {
-    const msg = overLimitPreview(previewJob(job), dailyCap, previewLinks());
+  private async sendOverLimitPreview(chatId: bigint, delivery: Claimed, job: Job, dailyCap: number, fieldNames: Map<string, string>) {
+    const msg = overLimitPreview(previewJobOf(job, fieldNames), dailyCap, previewLinks());
     const messageId = await sendMessage(chatId, msg.text, { buttons: msg.buttons });
     await prisma.delivery.update({
       where: { id: delivery.id },

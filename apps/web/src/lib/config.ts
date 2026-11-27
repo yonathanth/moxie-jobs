@@ -6,7 +6,7 @@ export const DEV_AUTH = process.env.NEXT_PUBLIC_DEV_AUTH === "true";
 /** Dev login as a real Telegram user id, so the bot's alerts reach your own chat. */
 export const DEV_TELEGRAM_ID = Number(process.env.NEXT_PUBLIC_DEV_TELEGRAM_ID) || undefined;
 /** Product name shown to people (shared links, previews). One place, for the rebrand. */
-export const APP_NAME = "Meklit Jobs";
+export const APP_NAME = "Gursha Jobs";
 /** Deep link that opens the bot on a shared job (the bot replies with that job). */
 export const botJobLink = (jobId: string) => `${BOT_URL}?start=job_${jobId}`;
 /** Opens the job straight in the Mini App (the bot's Main Mini App, set in BotFather); routed by SessionGate. */

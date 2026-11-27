@@ -1,13 +1,15 @@
 import type { InlineButton } from "./alert-card";
-import { premiumBucket } from "./enums";
+import { EMPLOYMENT_TYPES, premiumBucket } from "./enums";
+import { educationText, experienceText, isUnpaidJob, locationText, salaryText, type JobFacts } from "./jobs";
 
 /**
  * Previews for matches the free plan doesn't send in full. Pure, so the copy is unit-tested.
- *   over the daily limit  → a short text preview (title, kind of employer, place, deadline) + See job / Get Pro
- *   NGO, UN/AU/embassy, international company, abroad → a picture preview, sent the moment it matches
+ *   over the daily limit  → "New match: <title>", a few facts, one link and one button (Get Pro to see details)
+ *   NGO, UN/AU/embassy, international company, abroad → a picture with "An NGO is hiring: <title>", same structure
  *   every morning          → the jobs they missed yesterday (at most 10, title and employer) + See jobs / Get Pro
- * Never says "premium" to people: it names the kind of job. Links are also in the text (t.me deep links
- * that open the Mini App), so they work even where buttons don't show.
+ * Facts answer "is this for me?" (place, job type, deadline, experience, education, stated pay, openings), never
+ * "who" or "how to apply". Never says "premium" to people: it names the kind of job. The link in the text is a
+ * t.me deep link that opens the Mini App, so it works even where buttons don't show.
  */
 
 /** Start of today in Addis Ababa (UTC+3, no DST). */
@@ -19,6 +21,7 @@ export function startOfDayEat(now: Date): Date {
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const day = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Addis_Ababa" });
 const cut = (t: string, max: number) => (t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t);
+const employmentLabel = new Map<string, string>(EMPLOYMENT_TYPES.map((e) => [e.id, e.label]));
 
 /** Where previews link: the Mini App base (https, for buttons) and the bot's t.me link (for links in the text). */
 export interface PreviewLinks {
@@ -44,35 +47,71 @@ export function jobKindLabel(job: { employerType: string | null; isOverseas: boo
   }
 }
 
+/** Who is hiring, without naming them, and who those jobs are for: "An NGO is hiring" / "NGO jobs are for Pro members." */
+const KIND_COPY = {
+  ngo: { who: "An NGO", jobs: "NGO jobs" },
+  intl: { who: "A UN, AU or embassy office", jobs: "UN, AU and embassy jobs" },
+  foreign: { who: "An international company", jobs: "International company jobs" },
+  overseas: { who: "A company abroad", jobs: "Jobs abroad" },
+} as const;
+
 const startApp = (l: PreviewLinks, param: string) => (l.bot ? `${l.bot}?startapp=${param}` : null);
 const link = (href: string | null, text: string) => (href ? `<a href="${href}">${text}</a>` : text);
 const appButton = (l: PreviewLinks, text: string, path: string): InlineButton[] => (l.app ? [{ text, web_app: { url: `${l.app.replace(/\/$/, "")}${path}` } }] : []);
 
+/** What a preview may show: never the employer's name or how to apply. */
 export interface PreviewJob {
   id: string;
   title: string;
-  /** Kind of employer as shown on cards ("NGO", "Embassy"), never the name. */
-  employerLabel: string | null;
   location: string | null;
   deadline: Date | null;
+  /** "Full-time", "Contract"… when stated. */
+  jobType?: string | null;
+  /** "3+ years", "Fresh graduates". */
+  experience?: string | null;
+  /** "Bachelor's degree in Accounting". */
+  education?: string | null;
+  /** Only when the post states a figure. */
+  salary?: string | null;
+  openings?: number | null;
 }
 
-function facts(job: PreviewJob): string | null {
-  const parts = [job.employerLabel, job.location, job.deadline ? `apply by ${day(job.deadline)}` : null].filter(Boolean) as string[];
-  return parts.length ? esc(parts.join(" · ")) : null;
+/** Builds a PreviewJob from a stored job (field names come from the taxonomy). */
+export function previewJobOf(job: JobFacts & { id: string; fieldOfStudyIds?: string[] }, fieldNames: Map<string, string> = new Map()): PreviewJob {
+  const fields = (job.fieldOfStudyIds ?? []).filter((id) => id !== "any_field").map((id) => fieldNames.get(id) ?? "").filter(Boolean);
+  return {
+    id: job.id,
+    title: job.title,
+    location: locationText(job),
+    deadline: job.deadline,
+    jobType: job.employmentType ? employmentLabel.get(job.employmentType) ?? null : null,
+    experience: experienceText(job.experienceMin, job.experienceMax),
+    education: educationText(job.educationLevel, fields),
+    salary: salaryText(job.salaryRaw, isUnpaidJob(job)),
+    openings: job.positions,
+  };
 }
+
+/** Up to 3 short lines of facts; lines with nothing to say are left out. */
+function factLines(job: PreviewJob): string[] {
+  const lines = [
+    [job.location, job.jobType, job.deadline ? `apply by ${day(job.deadline)}` : null],
+    [job.experience, job.education ? cut(job.education, 70) : null],
+    [job.salary ? `Salary: ${cut(job.salary, 60)}` : null, job.openings && job.openings > 1 ? `${job.openings} openings` : null],
+  ];
+  return lines.map((parts) => parts.filter(Boolean).join(" · ")).filter(Boolean).map(esc);
+}
+
+const proLine = (l: PreviewLinks) => `${link(startApp(l, "plans"), "Subscribe to Pro")} to see who's hiring and apply.`;
+const proButton = (l: PreviewLinks): InlineButton[][] => {
+  const row = appButton(l, "Get Pro to see details", "/app/plans");
+  return row.length ? [row] : [];
+};
 
 /** A match over the free daily limit: what it is, not who or how to apply. Opens in the app tomorrow. */
 export function overLimitPreview(job: PreviewJob, dailyCap: number, l: PreviewLinks): { text: string; buttons: InlineButton[][] } {
-  const meta = facts(job);
-  const text = [
-    `<b>New match: ${esc(job.title)}</b>`,
-    ...(meta ? [meta] : []),
-    "",
-    `You've had your ${dailyCap} free job alerts for today, so this one is a preview. ${link(startApp(l, "plans"), "Get Pro")} to see the employer and how to apply now, or ${link(startApp(l, `job_${job.id}`), "open it in the app")} tomorrow for free.`,
-  ].join("\n");
-  const row = [...appButton(l, "See job", `/app/jobs/${job.id}`), ...appButton(l, "Get Pro", "/app/plans")];
-  return { text, buttons: row.length ? [row] : [] };
+  const text = [`<b>New match: ${esc(job.title)}</b>`, ...factLines(job), "", `You've reached your ${dailyCap} free jobs for today.`, proLine(l)].join("\n");
+  return { text, buttons: proButton(l) };
 }
 
 /** An NGO, UN/AU/embassy, international company or abroad job the free plan doesn't include: a picture preview. */
@@ -80,18 +119,10 @@ export function kindMatchPreview(
   job: PreviewJob & { employerType: string | null; isOverseas: boolean },
   l: PreviewLinks,
 ): { image: string; caption: string; buttons: InlineButton[][] } {
-  const kind = jobKindLabel(job) ?? "job";
-  const meta = [job.location, job.deadline ? `apply by ${day(job.deadline)}` : null].filter(Boolean) as string[];
-  const caption = [
-    `<b>New ${kind} for you</b>`,
-    "",
-    `<b>${esc(job.title)}</b>`,
-    ...(meta.length ? [esc(meta.join(" · "))] : []),
-    "",
-    `The employer and how to apply are for Pro members. ${link(startApp(l, "plans"), "Get Pro")} to see the details and apply, or ${link(startApp(l, `job_${job.id}`), "see the job")}.`,
-  ].join("\n");
-  const row = [...appButton(l, "See job", `/app/jobs/${job.id}`), ...appButton(l, "Get Pro to see details", "/app/plans")];
-  return { image: `/og/msg/premium?job=${job.id}`, caption, buttons: row.length ? [row] : [] };
+  const bucket = premiumBucket(job);
+  const copy = bucket ? KIND_COPY[bucket] : { who: "An employer", jobs: "These jobs" };
+  const caption = [`<b>${copy.who} is hiring: ${esc(job.title)}</b>`, ...factLines(job), "", `${copy.jobs} are for Pro members.`, proLine(l)].join("\n");
+  return { image: `/og/msg/premium?job=${job.id}`, caption, buttons: proButton(l) };
 }
 
 export interface MissedJob {

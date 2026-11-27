@@ -2,12 +2,12 @@
 
 import clsx from "clsx";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Bookmark, Lock, Search, SlidersHorizontal, X } from "lucide-react";
+import { Bookmark, ChevronDown, Clock, Lock, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ScreenSkeleton } from "@/components/skeletons";
-import { EMPLOYMENT_TYPES, type FeedScope } from "@ethio/shared";
+import { EMPLOYMENT_TYPES, type FeedScope, type JobCardDto } from "@ethio/shared";
 import { FilterSheet } from "@/components/jobs/FilterSheet";
 import { Portal } from "@/components/Portal";
 import { JobCard, JobCardSkeleton } from "@/components/jobs/JobCard";
@@ -74,6 +74,9 @@ function Feed() {
     return (feed.data?.pages.flatMap((p) => p.items) ?? []).filter((j) => !seen.has(j.id) && seen.add(j.id));
   }, [feed.data]);
   const lockedCount = feed.data?.pages[0]?.lockedCount ?? 0;
+  const held = state.scope === "for_you" ? feed.data?.pages[0]?.held : undefined;
+  // The list with a label above each day ("Today", "Yesterday", "Mon 24 Nov"). Saved jobs are in save order: no labels.
+  const rows = useMemo(() => (state.scope === "saved" ? items.map((job) => ({ kind: "job" as const, job })) : withDayLabels(items, state.scope === "for_you")), [items, state.scope]);
   // Just set up or edited preferences: the worker is still matching. Show that (not "no matches") and ask again.
   const matching = state.scope === "for_you" && !feed.isPlaceholderData && !!feed.data?.pages[0]?.matching;
   useEffect(() => {
@@ -88,10 +91,17 @@ function Feed() {
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
   useLayoutEffect(() => {
-    setScrollMargin(listRef.current?.offsetTop ?? 0);
-  }, [lockedCount, filterCount, state.scope, feed.isPending]);
+    const list = listRef.current;
+    setScrollMargin(list?.offsetTop ?? 0);
+    // The held-matches row above the list opens and closes: keep the list's offset right.
+    const above = list?.parentElement;
+    if (!list || !above) return;
+    const ro = new ResizeObserver(() => setScrollMargin(list.offsetTop));
+    ro.observe(above);
+    return () => ro.disconnect();
+  }, [lockedCount, filterCount, state.scope, feed.isPending, held?.count]);
   const virtualizer = useWindowVirtualizer({
-    count: items.length,
+    count: rows.length,
     estimateSize: () => 200,
     overscan: 6,
     gap: 12,
@@ -102,8 +112,8 @@ function Feed() {
   // Infinite scroll: fetch the next page when the last few cards come into view.
   const lastIndex = virtualItems[virtualItems.length - 1]?.index ?? -1;
   useEffect(() => {
-    if (lastIndex >= items.length - 6 && feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage();
-  }, [lastIndex, items.length, feed]);
+    if (lastIndex >= rows.length - 6 && feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage();
+  }, [lastIndex, rows.length, feed]);
 
   const setScope = (scope: FeedScope) => {
     if (scope === state.scope) return;
@@ -207,9 +217,9 @@ function Feed() {
               <Button onClick={() => void feed.refetch()}>Try again</Button>
             </div>
           </div>
-        ) : items.length === 0 && matching ? (
+        ) : items.length === 0 && !held && matching ? (
           <FindingMatches />
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && !held ? (
           <EmptyState
             scope={state.scope}
             filtered={filterCount > 0 || !!state.q}
@@ -220,7 +230,9 @@ function Feed() {
             onBrowse={() => setScope("all")}
           />
         ) : (
-          <div ref={listRef} className={clsx("transition-opacity", feed.isPlaceholderData && "opacity-60")}>
+          <div className={clsx("transition-opacity", feed.isPlaceholderData && "opacity-60")}>
+            {held && <HeldMatches count={held.count} items={held.items} onUpgrade={() => paywall.gate("daily_cap")} />}
+            <div ref={listRef}>
             {matching && (
               <p className="mb-3 flex items-center justify-center gap-2 text-[13px] text-hint">
                 <Spinner size="xs" />
@@ -228,17 +240,21 @@ function Feed() {
               </p>
             )}
             <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-              {virtualItems.map((v) => (
-                <div
-                  key={items[v.index]!.id}
-                  data-index={v.index}
-                  ref={virtualizer.measureElement}
-                  className="absolute inset-x-0 top-0"
-                  style={{ transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
-                >
-                  <JobCard job={items[v.index]!} />
-                </div>
-              ))}
+              {virtualItems.map((v) => {
+                const row = rows[v.index]!;
+                return (
+                  <div
+                    key={row.kind === "job" ? row.job.id : `day:${row.label}`}
+                    data-index={v.index}
+                    ref={virtualizer.measureElement}
+                    className="absolute inset-x-0 top-0"
+                    style={{ transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
+                  >
+                    {row.kind === "job" ? <JobCard job={row.job} /> : <DayLabel label={row.label} first={v.index === 0} />}
+                  </div>
+                );
+              })}
+            </div>
             </div>
             <div className="py-6 text-center text-[13px] text-hint">
               {feed.isFetchingNextPage ? (
@@ -270,6 +286,89 @@ function Feed() {
         </Portal>
       )}
     </main>
+  );
+}
+
+type Row = { kind: "job"; job: JobCardDto } | { kind: "day"; label: string };
+
+const EAT_MS = 3 * 3_600_000;
+const eatDay = (iso: string) => Math.floor((new Date(iso).getTime() + EAT_MS) / 86_400_000);
+
+/** "Today", "Yesterday", "Mon 24 Nov" (Addis Ababa days; the year only when it isn't this year). */
+function dayLabel(day: number, today: number): string {
+  if (day === today) return "Today";
+  if (day === today - 1) return "Yesterday";
+  const d = new Date(day * 86_400_000);
+  const sameYear = d.getUTCFullYear() === new Date(today * 86_400_000).getUTCFullYear();
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" });
+}
+
+/**
+ * Puts a day label before the first job of each day: the match day in "For you", the posting day in "All jobs".
+ * Locked matches pinned to the top carry no match day; they take the day of the job after them.
+ */
+function withDayLabels(items: JobCardDto[], byMatch: boolean): Row[] {
+  const today = eatDay(new Date().toISOString());
+  const days: (number | null)[] = items.map((j) => (byMatch ? (j.matchedAt ? eatDay(j.matchedAt) : null) : eatDay(j.firstSeenAt)));
+  for (let i = days.length - 2; i >= 0; i--) if (days[i] === null) days[i] = days[i + 1] ?? null;
+  for (let i = 1; i < days.length; i++) if (days[i] === null) days[i] = days[i - 1] ?? null;
+  const rows: Row[] = [];
+  let current: number | null | undefined;
+  items.forEach((job, i) => {
+    const day = days[i] ?? today;
+    if (day !== current) {
+      // A day only gets one label, even if a pinned job sends the order back and forth.
+      if (!rows.some((r) => r.kind === "day" && r.label === dayLabel(day, today))) rows.push({ kind: "day", label: dayLabel(day, today) });
+      current = day;
+    }
+    rows.push({ kind: "job", job });
+  });
+  return rows;
+}
+
+function DayLabel({ label, first }: { label: string; first: boolean }) {
+  return <p className={clsx("px-1 text-[13px] font-semibold text-hint", !first && "pt-3")}>{label}</p>;
+}
+
+/** Today's matches over the free limit: one row instead of a wall of locked cards. Tap to see them. */
+function HeldMatches({ count, items, onUpgrade }: { count: number; items: JobCardDto[]; onUpgrade: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="mb-4 rounded-2xl border border-separator bg-surface">
+      <button
+        type="button"
+        onClick={() => {
+          haptic.select();
+          setOpen((o) => !o);
+        }}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 p-4 text-left"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-separator-subtle bg-bg text-accent-strong">
+          <Clock className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold">
+            {count} more {count === 1 ? "match" : "matches"} today
+          </span>
+          <span className="block text-[13px] text-hint">{count === 1 ? "It opens" : "They open"} tomorrow, or now with Pro.</span>
+        </span>
+        <ChevronDown className={clsx("size-5 shrink-0 text-hint transition-transform", open && "rotate-180")} />
+      </button>
+      <div className="px-4 pb-4">
+        <Button variant="accent" onClick={onUpgrade}>
+          See them now
+        </Button>
+      </div>
+      {open && (
+        <div className="flex flex-col gap-3 border-t border-separator-subtle p-3">
+          {items.map((job) => (
+            <JobCard key={job.id} job={job} />
+          ))}
+          {count > items.length && <p className="py-1 text-center text-[13px] text-hint">and {count - items.length} more</p>}
+        </div>
+      )}
+    </section>
   );
 }
 
