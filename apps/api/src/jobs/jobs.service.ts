@@ -157,7 +157,7 @@ export class JobsService {
       });
       let page = rows.slice(0, limit);
       const last = rows[limit - 1];
-      // First page: at most 2 NGO/embassy/international jobs in the top 5, and at least one when they have one.
+      // First page: NGO/embassy/international jobs only in 2nd and 4th place (at least one when they have one).
       if (!cursor) {
         const extra = page.slice(0, 5).some((d) => isPremiumJob(d.job))
           ? []
@@ -217,7 +217,7 @@ export class JobsService {
     });
     let page = jobs.slice(0, limit);
     const last = page[page.length - 1]; // before reordering: the cursor follows the sort order
-    // First page: at most 2 NGO/embassy/international jobs in the top 5, and at least one when there is one.
+    // First page: NGO/embassy/international jobs only in 2nd and 4th place (at least one when there is one).
     if (!cursor) {
       const extra = page.slice(0, 5).some(isPremiumJob)
         ? []

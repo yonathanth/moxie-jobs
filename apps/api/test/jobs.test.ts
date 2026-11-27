@@ -188,16 +188,17 @@ describe("balanceTop", () => {
   // "P" = NGO / embassy / international job.
   const isP = (x: string) => x.startsWith("P");
   const k = (x: string) => x;
-  it("keeps at most 2 in the top 5; the rest follow right after, in order", () => {
-    expect(balanceTop(["P1", "P2", "P3", "a", "b", "c", "d"], [], isP, k)).toEqual(["P1", "P2", "a", "b", "c", "P3", "d"]);
+  it("puts them only in 2nd and 4th place, at most 2; the rest follow in order", () => {
+    expect(balanceTop(["P1", "P2", "P3", "a", "b", "c", "d"], [], isP, k)).toEqual(["a", "P1", "b", "P2", "c", "P3", "d"]);
+    expect(balanceTop(["P1", "a", "b", "c", "d", "e"], [], isP, k)).toEqual(["a", "P1", "b", "c", "d", "e"]);
   });
-  it("brings one up when the top 5 has none: from further down, else from extras", () => {
+  it("brings one up to 2nd place when the top 5 has none: from further down, else from extras", () => {
     expect(balanceTop(["a", "b", "c", "d", "e", "f", "P1"], [], isP, k)).toEqual(["a", "P1", "b", "c", "d", "e", "f"]);
     expect(balanceTop(["a", "b", "c", "d", "e", "f"], ["P9"], isP, k)).toEqual(["a", "P9", "b", "c", "d", "e", "f"]);
   });
-  it("leaves the list alone when the top 5 already has one or two, and copes with short pages", () => {
-    expect(balanceTop(["a", "P1", "b", "P2", "c", "d"], ["P9"], isP, k)).toEqual(["a", "P1", "b", "P2", "c", "d"]);
+  it("copes with short pages and pages of only those jobs", () => {
     expect(balanceTop([], ["P9"], isP, k)).toEqual([]);
     expect(balanceTop(["a"], [], isP, k)).toEqual(["a"]);
+    expect(balanceTop(["P1", "P2", "P3"], [], isP, k)).toEqual(["P3", "P1", "P2"]);
   });
 });

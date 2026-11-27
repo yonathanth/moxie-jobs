@@ -123,30 +123,33 @@ export function toPublic(job: Job, now = new Date()): PublicJobDto {
 }
 
 /**
- * The first page's top `n` (5): at most `max` (2) NGO/embassy/international jobs, and at least one when there is
- * one, first from further down the page, else from `extras` (fetched for this). Everything else keeps its order,
- * and jobs pushed out of the top follow right after it.
+ * The first page's top 5: NGO/embassy/international jobs only in 2nd and 4th place. Up to 2 of them (as many as
+ * were in the natural top 5), and at least one when there is one: from further down the page, else from `extras`
+ * (fetched for this). 1st, 3rd and 5th are the other jobs, in their order; everything else follows in its order.
  */
-export function balanceTop<T>(items: T[], extras: T[], isPremium: (t: T) => boolean, key: (t: T) => string, n = 5, max = 2): T[] {
-  const top: T[] = [];
-  const rest: T[] = [];
-  let premium = 0;
-  for (const item of items) {
-    if (top.length < n && !(isPremium(item) && premium >= max)) {
-      top.push(item);
-      if (isPremium(item)) premium++;
-    } else rest.push(item);
-  }
-  if (premium === 0 && top.length > 0) {
+export function balanceTop<T>(items: T[], extras: T[], isPremium: (t: T) => boolean, key: (t: T) => string, n = 5, slots = [1, 3]): T[] {
+  if (items.length === 0) return [];
+  const premium = items.filter(isPremium);
+  const others = items.filter((i) => !isPremium(i));
+  const inTop = Math.min(slots.length, items.slice(0, n).filter(isPremium).length);
+  let chosen = premium.slice(0, inTop);
+  if (chosen.length === 0) {
     const seen = new Set(items.map(key));
-    const fromRest = rest.findIndex(isPremium);
-    const pick = fromRest >= 0 ? rest.splice(fromRest, 1)[0] : extras.find((e) => isPremium(e) && !seen.has(key(e)));
-    if (pick) {
-      top.splice(Math.min(1, top.length), 0, pick);
-      if (top.length > n) rest.unshift(top.pop()!);
-    }
+    const pick = premium[0] ?? extras.find((e) => isPremium(e) && !seen.has(key(e)));
+    if (pick) chosen = [pick];
   }
-  return [...top, ...rest];
+  const used = new Set<string>();
+  const top: T[] = [];
+  const queue = [...others];
+  const spare = premium.filter((p) => !chosen.includes(p));
+  for (let i = 0; i < n; i++) {
+    const slot = slots.indexOf(i);
+    const next = slot >= 0 && chosen[slot] ? chosen[slot] : (queue.shift() ?? spare.shift());
+    if (!next) break;
+    top.push(next);
+    used.add(key(next));
+  }
+  return [...top, ...items.filter((i) => !used.has(key(i)))];
 }
 
 /** Keyset cursor: (sort time, id), newest first. Opaque base64url to the client. */

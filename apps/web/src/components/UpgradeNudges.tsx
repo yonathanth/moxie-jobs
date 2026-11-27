@@ -17,6 +17,7 @@ import { formatDate } from "@/lib/plans";
  *   1. hit today's alert limit      → "4 more jobs are waiting"
  *   2. premium jobs matched (7 days) → "3 NGO, embassy or international jobs matched you this week"
  *   3. otherwise the general Pro pitch and the CV pitch take turns
+ * (Free-plan pop-ups are switched off: FREE_NUDGES.)
  * Paid plan: only a renewal reminder, 3 days before it ends and on the last day.
  * Beta (everyone Pro): nothing.
  */
@@ -28,6 +29,11 @@ const DELAY_MS = 5_000;
 /** Free-plan pop-ups are at least this far apart. */
 const QUIET_AFTER_ANY = 8 * HOUR;
 const FIRST_DAY = DAY;
+/**
+ * Free-plan pop-ups are off: the bot's daily-limit message, the previews and the paywall on locked things cover
+ * them now. Set to true to bring them back.
+ */
+const FREE_NUDGES = false;
 
 interface Nudge {
   /** Remembered so it isn't shown again too soon. */
@@ -59,7 +65,7 @@ export function pickNudge(me: MeDto, now: number): Nudge | null {
     };
   }
 
-  if (me.plan === "free" && me.effectivePlan === "free") {
+  if (FREE_NUDGES && me.plan === "free" && me.effectivePlan === "free") {
     const cap = me.limits.dailyJobCap;
     if (cap !== null && me.stats.sentToday >= cap) {
       const w = me.stats.waitingToday;
