@@ -24,8 +24,8 @@ const FOR_YOU: Prisma.DeliveryWhereInput = {
 };
 /** Matching after a preferences save normally takes seconds; past this, stop showing "finding matches". */
 const MATCHING_MAX_MS = 2 * 60_000;
-/** Today's held matches listed under the "N more matches today" row (the rest are counted). */
-const HELD_SHOWN = 30;
+/** Today's held matches, all shown in the "N more matches today" sheet (a free day rarely holds more than a few dozen). */
+const HELD_SHOWN = 200;
 const LOOKUP_TTL_MS = 10 * 60_000;
 
 /**

@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Bookmark, ChevronDown, Clock, Lock, Search, SlidersHorizontal, X } from "lucide-react";
+import { Bookmark, ChevronRight, Clock, Lock, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +24,7 @@ import {
 import { MAX_FEED_ITEMS, useJob, useJobFeed, useTaxonomy } from "@/components/miniapp/hooks";
 import { useSession } from "@/components/miniapp/session";
 import { usePaywall } from "@/components/paywall";
-import { Button, Chip, Spinner } from "@/components/ui";
+import { Button, Chip, Sheet, Spinner } from "@/components/ui";
 import { haptic } from "@/lib/telegram";
 
 export default function JobsPage() {
@@ -330,30 +330,31 @@ function DayLabel({ label, first }: { label: string; first: boolean }) {
   return <p className={clsx("px-1 text-[13px] font-semibold text-hint", !first && "pt-3")}>{label}</p>;
 }
 
-/** Today's matches over the free limit: one row instead of a wall of locked cards. Tap to see them. */
+/**
+ * Today's matches over the free limit: one row instead of a wall of locked cards. Tapping it opens them all in a
+ * sheet over the feed; closing it goes back to the feed.
+ */
 function HeldMatches({ count, items, onUpgrade }: { count: number; items: JobCardDto[]; onUpgrade: () => void }) {
   const [open, setOpen] = useState(false);
+  const title = `${count} more ${count === 1 ? "match" : "matches"} today`;
   return (
     <section className="mb-4 rounded-2xl border border-separator bg-surface">
       <button
         type="button"
         onClick={() => {
           haptic.select();
-          setOpen((o) => !o);
+          setOpen(true);
         }}
-        aria-expanded={open}
         className="flex w-full items-center gap-3 p-4 text-left"
       >
         <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-separator-subtle bg-bg text-accent-strong">
           <Clock className="size-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-semibold">
-            {count} more {count === 1 ? "match" : "matches"} today
-          </span>
+          <span className="block text-[15px] font-semibold">{title}</span>
           <span className="block text-[13px] text-hint">{count === 1 ? "It opens" : "They open"} tomorrow, or now with Pro.</span>
         </span>
-        <ChevronDown className={clsx("size-5 shrink-0 text-hint transition-transform", open && "rotate-180")} />
+        <ChevronRight className="size-5 shrink-0 text-hint" />
       </button>
       <div className="px-4 pb-4">
         <Button variant="accent" onClick={onUpgrade}>
@@ -361,12 +362,28 @@ function HeldMatches({ count, items, onUpgrade }: { count: number; items: JobCar
         </Button>
       </div>
       {open && (
-        <div className="flex flex-col gap-3 border-t border-separator-subtle p-3">
-          {items.map((job) => (
-            <JobCard key={job.id} job={job} />
-          ))}
-          {count > items.length && <p className="py-1 text-center text-[13px] text-hint">and {count - items.length} more</p>}
-        </div>
+        <Sheet
+          title={title}
+          onClose={() => setOpen(false)}
+          footer={
+            <Button
+              variant="accent"
+              onClick={() => {
+                setOpen(false);
+                onUpgrade();
+              }}
+            >
+              See them now with Pro
+            </Button>
+          }
+        >
+          <p className="mb-3 text-[14px] text-hint">You&apos;ve had your free jobs for today. These open free tomorrow.</p>
+          <div className="flex flex-col gap-3 pb-2">
+            {items.map((job) => (
+              <JobCard key={job.id} job={job} />
+            ))}
+          </div>
+        </Sheet>
       )}
     </section>
   );

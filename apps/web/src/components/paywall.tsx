@@ -34,7 +34,7 @@ import {
 } from "@ethio/shared";
 import { useCheckout, usePayment, usePricing, useRefreshMe } from "@/components/miniapp/hooks";
 import { useSession } from "@/components/miniapp/session";
-import { formatBirr, PLAN_TAGLINE, savingVsMonthly } from "@/lib/plans";
+import { formatBirr, paywallTagline, planBenefits, savingVsMonthly } from "@/lib/plans";
 import { getWebApp, haptic } from "@/lib/telegram";
 import { Portal } from "./Portal";
 import { Button, ErrorText, IconTile, Spinner } from "./ui";
@@ -258,6 +258,7 @@ function PaywallSheet({
           {step.kind === "period" && pricing && (
             <PeriodStep
               plan={step.plan}
+              limits={limitsOf(step.plan)}
               pricing={pricing}
               onBack={() => setStep({ kind: "plans" })}
               onStarted={(period, paymentId, url) => setStep({ kind: "paying", plan: step.plan, period, paymentId, url })}
@@ -338,7 +339,7 @@ function PlansStep({
                 <Crown className={clsx("size-4", PLAN_STYLE[plan].crown)} />
                 <span className="text-[17px] font-bold tracking-tight">{PLAN_NAME[plan]}</span>
               </div>
-              <p className="mt-0.5 text-[13px] text-hint">{PLAN_TAGLINE[plan]}</p>
+              <p className="mt-0.5 text-[13px] font-medium text-text">{paywallTagline(limitsOf(plan))}</p>
             </div>
             <div className="shrink-0 text-right">
               <p className="text-[11px] font-medium uppercase tracking-wide text-hint">From</p>
@@ -362,11 +363,13 @@ function PlansStep({
 
 function PeriodStep({
   plan,
+  limits,
   pricing,
   onBack,
   onStarted,
 }: {
   plan: PaidPlan;
+  limits: PlanLimits;
   pricing: PricingDto;
   onBack: () => void;
   onStarted: (period: Period, paymentId: string, url: string) => void;
@@ -399,9 +402,17 @@ function PeriodStep({
         <Crown className={clsx("size-5", PLAN_STYLE[plan].crown)} />
         {PLAN_NAME[plan]}
       </h2>
-      <p className="mt-1 text-[15px] text-hint">How long do you want it for?</p>
+      <ul className="mt-3 flex flex-col gap-1.5">
+        {planBenefits(limits).map((b) => (
+          <li key={b} className="flex items-start gap-2 text-[14px]">
+            <Check className={clsx("mt-0.5 size-4 shrink-0", PLAN_STYLE[plan].crown)} strokeWidth={2.5} />
+            {b}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-5 text-[15px] font-semibold">How long do you want it for?</p>
 
-      <div className="mt-5 flex flex-col gap-2.5" role="radiogroup">
+      <div className="mt-2.5 flex flex-col gap-2.5" role="radiogroup">
         {SOLD_PERIODS.map((p) => {
           const selected = period === p;
           const save = savingVsMonthly(prices, p);

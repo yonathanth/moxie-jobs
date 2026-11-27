@@ -22,7 +22,7 @@ export function planFeatures(plan: Plan, l: PlanLimits): Feature[] {
   const alerts = l.dailyJobCap === null ? "Unlimited instant alerts" : `Up to ${l.dailyJobCap} instant alerts a day`;
   const premium: Feature = l.premiumJobs
     ? { text: "NGO, UN, AU, embassy, foreign-company & overseas jobs" }
-    : { text: "NGO, international & overseas jobs (daily summary only)", missing: true };
+    : { text: "NGO, international & overseas jobs (previews only)", missing: true };
   const features: Feature[] = [{ text: professions }, { text: alerts }, premium];
   if (plan === "free") features.push({ text: "Local private-sector & government jobs" });
   const cvs = (n: number | null, one: string, many: string) => (n === null ? `Unlimited ${many}` : `${n} ${n === 1 ? one : many}`);
@@ -32,6 +32,24 @@ export function planFeatures(plan: Plan, l: PlanLimits): Feature[] {
     features.push({ text: "Make CVs free, unlock them with a CV pack" });
   }
   return features;
+}
+
+/** One short line under each plan in the paywall: "Unlimited job alerts", "Unlimited job alerts + a CV for every job". */
+export function paywallTagline(l: PlanLimits): string {
+  const alerts = l.dailyJobCap === null ? "Unlimited job alerts" : `${l.dailyJobCap} job alerts a day`;
+  return l.cvTailorPerMonth === null ? `${alerts} + a CV for every job` : alerts;
+}
+
+/** What a paid plan gives, in a few words each, for the paywall's second step. */
+export function planBenefits(l: PlanLimits): string[] {
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  return [
+    l.dailyJobCap === null ? "Unlimited job alerts, sent the moment they're posted" : `Up to ${l.dailyJobCap} job alerts a day`,
+    ...(l.premiumJobs ? ["NGO, embassy & international jobs, with how to apply"] : []),
+    ...(l.cvTailorPerMonth === null ? ["A tailored CV for every job"] : l.cvTailorPerMonth ? [`${n(l.cvTailorPerMonth, "tailored CV", "tailored CVs")} a month`] : []),
+    ...(l.cvNewPerMonth === null ? ["Unlimited new or improved CVs"] : l.cvNewPerMonth ? [`${n(l.cvNewPerMonth, "new or improved CV", "new or improved CVs")} a month`] : []),
+    "AI polish and AI check for your CVs",
+  ];
 }
 
 export const PERIOD_SHORT: Record<BillingPeriod, string> = { week: "/week", month: "/month", quarter: "/3 months" };
