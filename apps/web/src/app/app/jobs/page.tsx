@@ -350,7 +350,7 @@ function HeldMatches({ count, items, dailyCap, onUpgrade }: { count: number; ite
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-semibold">{title}</span>
-          <span className="block text-[13px] text-hint">You&apos;ve seen your {dailyCap} free jobs today. {count === 1 ? "This opens" : "These open"} tomorrow, or now with Pro.</span>
+          <span className="block text-[13px] text-hint">You&apos;ve seen your {dailyCap} free jobs today. <span className="font-semibold text-text">Subscribe to see {count === 1 ? "it" : "them"} now</span>, or wait until tomorrow.</span>
         </span>
         <ChevronRight className="size-5 shrink-0 text-hint" />
       </button>
@@ -375,7 +375,7 @@ function HeldMatches({ count, items, dailyCap, onUpgrade }: { count: number; ite
             </Button>
           }
         >
-          <p className="mb-3 text-[14px] text-hint">You&apos;ve seen your {dailyCap} free jobs today. {count === 1 ? "This opens" : "These open"} tomorrow, or now with Pro.</p>
+          <p className="mb-3 text-[14px] text-hint">You&apos;ve seen your {dailyCap} free jobs today. <span className="font-semibold text-text">Subscribe to see {count === 1 ? "it" : "them"} now</span>, or wait until tomorrow.</p>
           <div className="flex flex-col gap-3 pb-2">
             {items.map((job) => (
               <JobCard key={job.id} job={job} />

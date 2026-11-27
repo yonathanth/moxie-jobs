@@ -67,7 +67,7 @@ export function packsPromo(prices: Record<CvPackId, number>): BotPhotoMessage {
       "",
       "Credits never expire.",
     ].join("\n"),
-    buttons: [[{ text: "See CV packs", path: "/app/plans#packs" }]],
+    buttons: [[{ text: "See CV packs", path: "/app/plans?show=packs" }]],
   };
 }
 

@@ -144,7 +144,7 @@ function body(job: PreviewJob, ending: string[]): string {
   return [`<b>New match: ${esc(job.title)}</b>`, "", esc(cut(previewSentence(job), 400)), ...(fact ? ["", fact] : []), "", ...ending].join("\n");
 }
 
-const proLine = (l: PreviewLinks) => `${link(startApp(l, "plans"), "Subscribe to Pro")} to see who's hiring and apply.`;
+const proLine = (l: PreviewLinks) => `<b>${link(startApp(l, "plans"), "Subscribe to Pro")}</b> to see who's hiring and apply.`;
 const proButton = (l: PreviewLinks): InlineButton[][] => {
   const row = appButton(l, "Get Pro to see details", "/app/plans");
   return row.length ? [row] : [];

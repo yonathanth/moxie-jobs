@@ -40,6 +40,17 @@ export default function PlansPage() {
 
   useBackButton(() => (pending ? setPending(null) : router.push("/app")));
 
+  // "See CV packs" opens /app/plans?show=packs: scroll to the packs once they're on the page. (Not a #hash:
+  // Telegram puts its launch data in the hash, so ours would be lost.)
+  const loaded = pricing.isSuccess && !pending;
+  useEffect(() => {
+    if (!loaded) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("show") !== "packs" && window.location.hash !== "#packs") return;
+    const t = setTimeout(() => document.getElementById("packs")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+    return () => clearTimeout(t);
+  }, [loaded]);
+
   if (pending) return <Waiting payment={pending} onDone={() => setPending(null)} />;
 
   if (pricing.isPending) {

@@ -14,7 +14,7 @@ const job = {
   salary: "25,000 Br",
 };
 const proButton = [[{ text: "Get Pro to see details", web_app: { url: "https://jobs.example.app/app/plans" } }]];
-const proLink = `<a href="https://t.me/gurshajobsbot?startapp=plans">Subscribe to Pro</a> to see who's hiring and apply.`;
+const proLink = `<b><a href="https://t.me/gurshajobsbot?startapp=plans">Subscribe to Pro</a></b> to see who's hiring and apply.`;
 
 describe("previews", () => {
   it("names who is hiring without naming them, one kind at a time", () => {
