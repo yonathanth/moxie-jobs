@@ -37,6 +37,8 @@ const schema = z
     DELIVERY_ENABLED: bool.default(true),
     /** Mini App base URL (for "open my jobs" buttons; needs https). */
     WEB_APP_URL: z.url().default("http://localhost:3000"),
+    /** The bot's @username: links in preview texts (t.me/<bot>?startapp=…). Optional; without it the texts carry no links. */
+    TELEGRAM_BOT_USERNAME: z.string().trim().min(1).transform((v) => v.replace(/^@/, "")).optional(),
     /** API base URL (click-tracking redirect /r/:deliveryId; used only when https). */
     PUBLIC_API_URL: z.url().default("http://localhost:4000"),
 

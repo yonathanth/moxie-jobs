@@ -33,6 +33,7 @@ export function PreferenceSections({ group, value, onChange, taxonomy, limits, b
               taxonomy={taxonomy}
               professionIds={value.professionIds}
               functionIds={value.functionIds}
+              excludedIds={value.excludedProfessionIds}
               limits={limits}
               onChange={onChange}
             />
@@ -47,6 +48,7 @@ export function PreferenceSections({ group, value, onChange, taxonomy, limits, b
             taxonomy={taxonomy}
             professionIds={value.professionIds}
             functionIds={value.functionIds}
+              excludedIds={value.excludedProfessionIds}
             limits={limits}
             onChange={onChange}
           />

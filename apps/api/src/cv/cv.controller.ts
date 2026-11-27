@@ -127,7 +127,7 @@ export class CvController {
     return { tips: await this.cvs.review(user, id, body.content as CvContent | undefined) };
   }
 
-  /** Sends the PDF to the person's Telegram chat (watermarked while unpaid). */
+  /** Spends a CV pack credit on a locked CV and sends the clean PDF to the chat. */
   @Post(":id/unlock")
   unlock(@CurrentUser() user: User, @Param("id", new ParseUUIDPipe()) id: string) {
     return this.cvs.unlockWithCredit(user, id);
@@ -137,6 +137,6 @@ export class CvController {
   @HttpCode(200)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   send(@CurrentUser() user: User, @Param("id", new ParseUUIDPipe()) id: string): Promise<{ sent: boolean; watermarked: boolean }> {
-    return this.cvs.sendPdf(user, id);
+    return this.cvs.download(user, id);
   }
 }

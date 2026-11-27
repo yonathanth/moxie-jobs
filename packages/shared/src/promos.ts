@@ -92,7 +92,7 @@ export function premiumPromo(job: { id: string; title: string; kind: string | nu
   return {
     image: `/og/msg/premium?job=${job.id}`,
     caption: [
-      "<b>A premium job matched you</b>",
+      "<b>An NGO, embassy or international job matched you</b>",
       "",
       `<b>${esc(job.title)}</b>`,
       ...(meta ? [esc(meta)] : []),
@@ -108,8 +108,8 @@ export function renewPromo(plan: "pro" | "career", until: Date, lapsed: boolean)
   return {
     image: `/og/msg/renew?plan=${plan}&until=${until.toISOString().slice(0, 10)}${lapsed ? "&lapsed=1" : ""}`,
     caption: lapsed
-      ? [`<b>Your ${name} has ended</b>`, "", "You're back on the free plan: a daily alert limit and no premium jobs. Renew to get them back."].join("\n")
-      : [`<b>Your ${name} ends on ${day(until)}</b>`, "", "Renew to keep every alert and premium job coming. The new time is added to what you have left."].join("\n"),
+      ? [`<b>Your ${name} has ended</b>`, "", "You're back on the free plan: a daily alert limit and no NGO, embassy or international jobs. Renew to get them back."].join("\n")
+      : [`<b>Your ${name} ends on ${day(until)}</b>`, "", "Renew to keep every alert and NGO, embassy and international job coming. The new time is added to what you have left."].join("\n"),
     buttons: [[{ text: `Renew ${name}`, path: "/app/plans" }]],
   };
 }
@@ -141,7 +141,9 @@ export const SHARE_APP_KINDS = ["general", "jobs", "cv_create", "cv_improve", "p
 export type ShareAppKind = (typeof SHARE_APP_KINDS)[number];
 
 /** Where a share's button lands in the Mini App (t.me/<bot>?startapp=<kind>; SessionGate routes it). */
-export const START_APP_ROUTES: Record<ShareAppKind, string> = {
+/** startapp=<param> → Mini App route: the share kinds, plus links in bot messages ("plans"). */
+export const START_APP_ROUTES: Record<ShareAppKind | "plans", string> = {
+  plans: "/app/plans",
   general: "/app",
   jobs: "/app/jobs?scope=for_you",
   cv_create: "/app/cvs?new=create",

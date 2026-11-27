@@ -13,6 +13,7 @@ import { Badge, Button, Card, cx, IconTile, PageHeader, Screen, Section, Sheet, 
 import { haptic } from "@/lib/telegram";
 import { ContactForm } from "@/components/cv/ContactForm";
 import { ShareAppCard } from "@/components/ShareAppCard";
+import { categoryLabel } from "@/components/preferences/ProfessionPicker";
 import { formatDate } from "@/lib/plans";
 
 /** Mini App home: plan, today's alerts, locked premium matches, what we match on. */
@@ -276,7 +277,10 @@ function PreferencesSummary({ prefs, taxonomy }: { prefs: PreferencesDto; taxono
     const cities = new Map(taxonomy.cities.map((c) => [c.id, c.name]));
     const work = [
       ...prefs.professionIds.map((id) => professions.get(id) ?? id),
-      ...prefs.functionIds.map((id) => `Any ${functions.get(id) ?? id} job`),
+      ...prefs.functionIds.map((id) => {
+        const fn = taxonomy.functions.find((f) => f.id === id);
+        return categoryLabel(fn?.name ?? id, fn?.professions.map((p) => p.id) ?? [], prefs.excludedProfessionIds ?? []);
+      }),
     ];
     return [
       { label: "Jobs", value: work.join(", ") || "Matched by degree" },

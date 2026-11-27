@@ -32,7 +32,6 @@ import { sendTimeAfterQuiet, startOfDayEat } from "./schedule";
  *   paid:  plan ends within 2 days → renewal; out of CVs → packs (weekly)
  *   ended: plan ended in the last 3 days → "has ended" (once)
  *   free:  a premium job matched → premium (one a day)
- *          held back by the daily limit today → cap (one a day)
  *          else take turns: upgrade (daily) · make/tailor a CV (every 3 days, while the free ones are unused)
  *               · CV packs (every 5 days, once out of CVs); the one sent longest ago goes next
  *
@@ -95,7 +94,7 @@ export function pickPromo(i: PromoInput): { kind: PromoKind; ref?: string } | nu
   if (!i.free) return null;
 
   if (i.premiumJobId && !today("premium")) return { kind: "premium", ref: i.premiumJobId };
-  if (i.capWaiting > 0 && !today("cap")) return { kind: "cap" };
+  // No "cap" picture any more: each match over the limit gets its own preview, and the morning message lists them.
 
   const turns: PromoKind[] = [];
   if (!today("upgrade")) turns.push("upgrade");
@@ -268,7 +267,7 @@ async function buildPromo(pick: { kind: PromoKind; ref?: string }, user: UserRow
       const n = await prisma.delivery.count({
         where: { userId: user.id, status: "skipped", error: "daily_cap", createdAt: { gte: startOfDayEat(new Date()) }, job: { status: "active" } },
       });
-      return capPromo(n, resolveLimits("free", settings).dailyJobCap ?? 10);
+      return capPromo(n, resolveLimits("free", settings).dailyJobCap ?? 5);
     }
     case "premium": {
       const job = pick.ref ? await prisma.job.findUnique({ where: { id: pick.ref } }) : null;

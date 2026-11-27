@@ -25,6 +25,8 @@ export interface MatchCandidate {
   /** In saved order (main first); only the first N count, N = plan limit. */
   professionIds: string[];
   functionIds: string[];
+  /** Roles skipped inside followed categories. Optional: older callers/tests have none. */
+  excludedProfessionIds?: string[];
   fieldOfStudyIds: string[];
   educationLevel: string | null;
   experienceBand: string | null;
@@ -85,6 +87,7 @@ export function matchJob(
   // Target: profession, followed category, or degree field.
   let via: "profession" | "function" | "field" | null = null;
   if (job.professionId && professions.includes(job.professionId)) via = "profession";
+  else if (job.professionId && user.excludedProfessionIds?.includes(job.professionId)) return { ok: false, reason: "excluded" };
   else if (job.functionId && functions.includes(job.functionId)) via = "function";
   else {
     const jobFields = job.fieldOfStudyIds.filter((f) => f !== "any_field");

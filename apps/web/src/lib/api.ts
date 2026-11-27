@@ -1,5 +1,6 @@
 import type {
   CvContact,
+  MessagingStatusDto,
   PackCheckoutRequest,
   AdminOverviewDto,
   AdminSettingsDto,
@@ -86,6 +87,8 @@ export const api = {
   setCvContact: (token: string, body: CvContact) => request<MeDto>("/me/cv-contact", { method: "PUT", token, body: JSON.stringify(body) }),
   updateMe: (token: string, body: { alertsPaused: boolean }) =>
     request<MeDto>("/me", { method: "PATCH", token, body: JSON.stringify(body) }),
+  messaging: (token: string) => request<MessagingStatusDto>("/me/messaging", { token }),
+  messagingAllowed: (token: string) => request<MessagingStatusDto>("/me/messaging/allowed", { method: "POST", token, body: "{}" }),
   preferences: (token: string) => request<PreferencesDto | null>("/me/preferences", { token }),
   savePreferences: (token: string, body: PreferencesInput) =>
     request<PreferencesDto>("/me/preferences", { method: "PUT", token, body: JSON.stringify(body) }),

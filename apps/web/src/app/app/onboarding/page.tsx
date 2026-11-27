@@ -12,7 +12,8 @@ import { PreferenceSections } from "@/components/preferences/PreferenceSections"
 import { EMPTY_PREFERENCES } from "@/components/preferences/state";
 import { Button, CenteredMessage, ErrorText, IconTile, PageHeader, Screen, StickyFooter } from "@/components/ui";
 import { ApiError } from "@/lib/api";
-import { askToAllowMessages, haptic } from "@/lib/telegram";
+import { haptic } from "@/lib/telegram";
+import { AlertsPrompt, useMessagingStatus } from "@/components/miniapp/AlertsGate";
 
 /**
  * First run: one step, the kinds of jobs they want. Everything else (degree, experience, city,
@@ -25,6 +26,8 @@ export default function OnboardingPage() {
   const save = useSavePreferences();
   const [prefs, setPrefs] = useState<Preferences>(EMPTY_PREFERENCES);
   const [done, setDone] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const messaging = useMessagingStatus();
 
   // Already set up (e.g. reopened an old link): go to the editor instead.
   useEffect(() => {
@@ -41,16 +44,20 @@ export default function OnboardingPage() {
   }
 
   const picked = prefs.professionIds.length + prefs.functionIds.length;
-  const finish = () =>
+  const save_ = () =>
     save.mutate(prefs, {
       onSuccess: () => {
         haptic.success();
         setDone(true);
-        // Opened from a link without starting the bot: ask now, or their alerts can't be delivered.
-        askToAllowMessages();
       },
       onError: () => haptic.error(),
     });
+  // Opened from a link without starting the bot: alerts can't reach them until they allow messages, so that
+  // comes first (and the first jobs, sent right after saving, then arrive).
+  const finish = () => {
+    if (messaging.status === "needed") return setAsking(true);
+    save_();
+  };
 
   return (
     <Screen>
@@ -72,10 +79,20 @@ export default function OnboardingPage() {
               {save.error instanceof ApiError && save.error.issues.length ? save.error.issues.map((i) => i.message).join(". ") : save.error.message}
             </ErrorText>
           )}
-          <Button onClick={finish} disabled={picked === 0} loading={save.isPending}>
+          <Button onClick={finish} disabled={picked === 0} loading={save.isPending || (picked > 0 && messaging.status === "checking")}>
             {picked === 0 ? "Pick at least one" : "Start getting jobs"}
           </Button>
         </StickyFooter>
+      )}
+
+      {asking && (
+        <AlertsPrompt
+          onAllowed={() => {
+            messaging.markAllowed();
+            setAsking(false);
+            save_();
+          }}
+        />
       )}
 
       {done && <AllSet onContinue={() => router.replace("/app/jobs")} />}
@@ -98,7 +115,7 @@ function AllSet({ onContinue }: { onContinue: () => void }) {
             You&apos;re all set
           </h2>
           <p className="mt-2 text-[15px] text-hint">
-            We&apos;ll message you the moment a matching job is posted. Add more details anytime in Profile → Matching on.
+            We&apos;re finding jobs that match you now and will send them to your chat, then every new one the moment it&apos;s posted. Add more details anytime in Profile → Matching on.
           </p>
           <div className="mt-6">
             <Button onClick={onContinue}>

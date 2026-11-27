@@ -28,9 +28,9 @@ describe("dueSlot", () => {
 });
 
 describe("pickPromo", () => {
-  it("free: a premium match first, then the alert limit, once a day each", () => {
+  it("free: a premium match first, then the turns (no alert-limit picture: each held job gets a preview)", () => {
     expect(pickPromo({ ...base, premiumJobId: "j1", capWaiting: 3 })).toEqual({ kind: "premium", ref: "j1" });
-    expect(pickPromo({ ...base, premiumJobId: "j1", capWaiting: 3, recent: [sent("premium", "2026-11-25T12:30:00", "j0")] })).toEqual({ kind: "cap" });
+    expect(pickPromo({ ...base, premiumJobId: "j1", capWaiting: 3, recent: [sent("premium", "2026-11-25T12:30:00", "j0")] })).toEqual({ kind: "upgrade" });
     expect(pickPromo({ ...base, capWaiting: 3, recent: [sent("cap", "2026-11-25T12:30:00")] })).toEqual({ kind: "upgrade" });
   });
 

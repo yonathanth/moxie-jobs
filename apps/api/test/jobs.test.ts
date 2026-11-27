@@ -86,6 +86,13 @@ describe("toCard", () => {
   it("leaves local jobs open on the free plan", () => {
     expect(toCard(job({ employerType: "local_private" }), { ...ctx, premiumJobs: false }).locked).toBe(false);
   });
+
+  it("locks a match over today's free limit until tomorrow, and says why", () => {
+    const held = toCard(job({ employerType: "local_private" }), { ...ctx, premiumJobs: false, match: "waiting", heldToday: true });
+    expect(held).toMatchObject({ locked: true, lockReason: "daily_limit", company: null, apply: null, summary: null });
+    expect(toCard(job(), { ...ctx, premiumJobs: false }).lockReason).toBe("premium");
+    expect(toCard(job({ employerType: "local_private" }), { ...ctx, premiumJobs: false }).lockReason).toBeNull();
+  });
 });
 
 describe("cursors", () => {

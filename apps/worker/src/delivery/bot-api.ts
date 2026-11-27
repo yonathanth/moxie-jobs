@@ -7,6 +7,8 @@ import { env } from "../env";
  */
 
 export class BotBlockedError extends Error {}
+/** 400 "chat not found": they opened the Mini App but never pressed Start or allowed messages. */
+export class ChatNotFoundError extends Error {}
 
 interface BotResponse<T> {
   ok: boolean;
@@ -42,6 +44,7 @@ async function call<T>(method: string, body: Record<string, unknown>, attempt = 
     return call(method, body, attempt + 1);
   }
   if (data.error_code === 403) throw new BotBlockedError(data.description ?? "bot blocked");
+  if (data.error_code === 400 && /chat not found/i.test(data.description ?? "")) throw new ChatNotFoundError(data.description ?? "chat not found");
   throw new Error(`Telegram ${method} failed (${data.error_code}): ${data.description}`);
 }
 

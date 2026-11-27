@@ -6,6 +6,7 @@ import { useState } from "react";
 import { BottomNav } from "../BottomNav";
 import { PaywallProvider } from "../paywall";
 import { UpgradeNudges } from "../UpgradeNudges";
+import { AlertsGate } from "./AlertsGate";
 import { Prefetch } from "./Prefetch";
 import { SessionGate } from "./session";
 import { prepareWebApp } from "@/lib/telegram";
@@ -38,6 +39,7 @@ export function MiniAppProvider({ children }: { children: React.ReactNode }) {
           <BottomNav />
           <Prefetch />
           <UpgradeNudges />
+          <AlertsGate />
         </PaywallProvider>
       </SessionGate>
     </QueryClientProvider>

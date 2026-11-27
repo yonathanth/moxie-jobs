@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Job, Prisma, User } from "@ethio/db";
-import { effectivePlan, employerLabel, isPremiumJob, locationText, resolveLimits, type JobCardDto, type JobFeedPage, type JobFeedQuery, type PostedWithin, type PublicJobDto } from "@ethio/shared";
+import { effectivePlan, employerLabel, isPremiumJob, locationText, resolveLimits, startOfDayEat, type JobCardDto, type JobFeedPage, type JobFeedQuery, type PostedWithin, type PublicJobDto } from "@ethio/shared";
 import { BotService } from "../bot/bot.service";
 import { jobShareCaption } from "../bot/bot.messages";
 import { ENV, type Env } from "../config/config.module";
@@ -13,15 +13,27 @@ const POSTED_MS: Record<PostedWithin, number> = { "1d": DAY, "3d": 3 * DAY, "7d"
 /** "All jobs" never reaches further back than this, whatever the filters. */
 const ALL_JOBS_WINDOW_MS = 30 * DAY;
 /** Deliveries shown in "For you": sent alerts, ones held by the daily limit, and locked premium matches. */
+// Everything matched to them: sent, on its way (pending/sending), held by the daily limit, locked, or not
+// deliverable because the bot can't message them yet (still a match; it shows here).
 const FOR_YOU: Prisma.DeliveryWhereInput = {
-  OR: [{ status: { in: ["sent", "locked", "teased"] } }, { status: "skipped", error: "daily_cap" }],
+  OR: [
+    { status: { in: ["sent", "pending", "sending", "locked", "teased"] } },
+    { status: "skipped", error: "daily_cap" },
+    { status: "failed", error: "chat_not_found" },
+  ],
 };
+/** Matching after a preferences save normally takes seconds; past this, stop showing "finding matches". */
+const MATCHING_MAX_MS = 2 * 60_000;
 const LOOKUP_TTL_MS = 10 * 60_000;
 
-function matchOf(status: string, error: string | null): JobCardDto["match"] {
-  if (status === "sent") return "sent";
-  if (status === "locked" || status === "teased") return "locked";
-  if (status === "skipped" && error === "daily_cap") return "waiting";
+/**
+ * Why a job is in "For you". "waiting" = held by today's free alert limit: locked until tomorrow (Addis Ababa).
+ * heldFrom = start of today for plans with a daily limit, null otherwise (nothing is held then).
+ */
+function matchOf(d: { status: string; error: string | null; createdAt: Date }, heldFrom: Date | null): JobCardDto["match"] {
+  if (d.status === "sent" || d.status === "pending" || d.status === "sending") return "sent";
+  if (d.status === "locked" || d.status === "teased") return "locked";
+  if (d.status === "skipped" && d.error === "daily_cap") return heldFrom && d.createdAt >= heldFrom ? "waiting" : null;
   return null;
 }
 
@@ -50,9 +62,15 @@ export class JobsService {
     return this.lookups;
   }
 
-  private async userView(user: User): Promise<{ premiumJobs: boolean; excludeUnpaid: boolean }> {
+  private async userView(user: User): Promise<{ premiumJobs: boolean; excludeUnpaid: boolean; heldFrom: Date | null }> {
     const settings = await this.settings.get();
-    return { premiumJobs: resolveLimits(effectivePlan(user, settings), settings).premiumJobs, excludeUnpaid: settings.unpaidJobs === "exclude" };
+    const limits = resolveLimits(effectivePlan(user, settings), settings);
+    return {
+      premiumJobs: limits.premiumJobs,
+      excludeUnpaid: settings.unpaidJobs === "exclude",
+      // Matches over today's free limit stay locked until tomorrow; plans without a limit see everything.
+      heldFrom: limits.dailyJobCap === null ? null : startOfDayEat(new Date()),
+    };
   }
 
   /** "Similar jobs": same profession when known, else same category; never the job itself. */
@@ -94,8 +112,8 @@ export class JobsService {
     const now = new Date();
     const limit = Math.min(Math.max(q.limit ?? 20, 5), 30);
     const cursor = decodeCursor(q.cursor);
-    const [{ premiumJobs, excludeUnpaid }, maps] = await Promise.all([this.userView(user), this.lookupMaps()]);
-    const card = (job: Job, match: JobCardDto["match"], saved: boolean) => toCard(job, { premiumJobs, match, saved, ...maps });
+    const [{ premiumJobs, excludeUnpaid, heldFrom }, maps] = await Promise.all([this.userView(user), this.lookupMaps()]);
+    const card = (job: Job, match: JobCardDto["match"], saved: boolean) => toCard(job, { premiumJobs, match, saved, heldToday: match === "waiting", ...maps });
 
     if (q.scope === "saved") {
       const rows = await this.prisma.savedJob.findMany({
@@ -109,7 +127,7 @@ export class JobsService {
         include: { job: true },
       });
       const page = rows.slice(0, limit);
-      const matches = await this.matchesFor(user.id, page.map((r) => r.jobId));
+      const matches = await this.matchesFor(user.id, page.map((r) => r.jobId), heldFrom);
       const last = rows[limit - 1];
       return {
         items: page.map((r) => card(r.job, matches.get(r.jobId) ?? null, true)),
@@ -140,10 +158,11 @@ export class JobsService {
         });
         page = pinAt(page, locked, [0, 2], (d) => d.id);
       }
-      const saved = await this.savedSet(user.id, page.map((d) => d.jobId));
+      const [saved, matching] = await Promise.all([this.savedSet(user.id, page.map((d) => d.jobId)), cursor ? false : this.stillMatching(user.id, now)]);
       return {
-        items: page.map((d) => card(d.job, matchOf(d.status, d.error), saved.has(d.jobId))),
+        items: page.map((d) => card(d.job, matchOf(d, heldFrom), saved.has(d.jobId))),
         nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
+        ...(matching ? { matching } : {}),
         ...(cursor || premiumJobs
           ? {}
           : {
@@ -169,7 +188,7 @@ export class JobsService {
     });
     const page = jobs.slice(0, limit);
     const ids = page.map((j) => j.id);
-    const [delivered, saved] = await Promise.all([this.matchesFor(user.id, ids), this.savedSet(user.id, ids)]);
+    const [delivered, saved] = await Promise.all([this.matchesFor(user.id, ids, heldFrom), this.savedSet(user.id, ids)]);
     const last = page[page.length - 1];
     return {
       items: page.map((j) => card(j, delivered.get(j.id) ?? null, saved.has(j.id))),
@@ -180,13 +199,14 @@ export class JobsService {
   async one(user: User, id: string): Promise<JobCardDto> {
     const job = await this.prisma.job.findUnique({ where: { id } });
     if (!job || job.status === "hidden" || job.status === "review") throw new NotFoundException("Job not found");
-    const [{ premiumJobs }, maps, delivery, saved] = await Promise.all([
+    const [{ premiumJobs, heldFrom }, maps, delivery, saved] = await Promise.all([
       this.userView(user),
       this.lookupMaps(),
-      this.prisma.delivery.findUnique({ where: { userId_jobId: { userId: user.id, jobId: id } }, select: { status: true, error: true } }),
+      this.prisma.delivery.findUnique({ where: { userId_jobId: { userId: user.id, jobId: id } }, select: { status: true, error: true, createdAt: true } }),
       this.prisma.savedJob.findUnique({ where: { userId_jobId: { userId: user.id, jobId: id } }, select: { jobId: true } }),
     ]);
-    return toCard(job, { premiumJobs, match: delivery ? matchOf(delivery.status, delivery.error) : null, saved: !!saved, ...maps });
+    const match = delivery ? matchOf(delivery, heldFrom) : null;
+    return toCard(job, { premiumJobs, match, saved: !!saved, heldToday: match === "waiting", ...maps });
   }
 
   /** Bookmark (idempotent). */
@@ -224,10 +244,17 @@ export class JobsService {
     return toPublic(job);
   }
 
-  private async matchesFor(userId: string, jobIds: string[]): Promise<Map<string, JobCardDto["match"]>> {
+  /** The worker hasn't finished matching their latest preferences save (UserPreferences.matchedAt behind updatedAt). */
+  private async stillMatching(userId: string, now: Date): Promise<boolean> {
+    const p = await this.prisma.userPreferences.findUnique({ where: { userId }, select: { updatedAt: true, matchedAt: true } });
+    if (!p || now.getTime() - p.updatedAt.getTime() > MATCHING_MAX_MS) return false;
+    return !p.matchedAt || p.matchedAt < p.updatedAt;
+  }
+
+  private async matchesFor(userId: string, jobIds: string[], heldFrom: Date | null): Promise<Map<string, JobCardDto["match"]>> {
     if (!jobIds.length) return new Map();
-    const rows = await this.prisma.delivery.findMany({ where: { userId, jobId: { in: jobIds } }, select: { jobId: true, status: true, error: true } });
-    return new Map(rows.map((d) => [d.jobId, matchOf(d.status, d.error)]));
+    const rows = await this.prisma.delivery.findMany({ where: { userId, jobId: { in: jobIds } }, select: { jobId: true, status: true, error: true, createdAt: true } });
+    return new Map(rows.map((d) => [d.jobId, matchOf(d, heldFrom)]));
   }
 
   private async savedSet(userId: string, jobIds: string[]): Promise<Set<string>> {

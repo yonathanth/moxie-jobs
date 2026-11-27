@@ -61,7 +61,7 @@ export default function SettingsAdminPage() {
       <Section title="Alert timing" description="Hours are Addis Ababa time.">
         <div className="grid grid-cols-2 gap-3">
           <NumberField label="Alert on jobs up to (hours old)" value={draft.delivery.maxJobAgeHours} min={1} max={168} onChange={(maxJobAgeHours) => setDelivery({ maxJobAgeHours })} />
-          <NumberField label="Daily summary at (hour)" value={draft.delivery.teaserHourEat} min={0} max={23} onChange={(teaserHourEat) => setDelivery({ teaserHourEat })} />
+          <NumberField label="Missed-jobs message at (hour)" value={draft.delivery.digestHourEat} min={0} max={23} onChange={(digestHourEat) => setDelivery({ digestHourEat })} />
           <NumberField label="Quiet hours from" value={draft.delivery.quietFromEat} min={0} max={23} onChange={(quietFromEat) => setDelivery({ quietFromEat })} />
           <NumberField label="Quiet hours until" value={draft.delivery.quietToEat} min={0} max={23} onChange={(quietToEat) => setDelivery({ quietToEat })} />
         </div>

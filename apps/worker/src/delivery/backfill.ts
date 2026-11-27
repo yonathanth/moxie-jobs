@@ -2,7 +2,8 @@ import { prisma } from "../db";
 import { log } from "../log";
 import { backfillUser } from "./matcher";
 
-const CHECK_MS = 20_000;
+// Short: right after setup the Mini App shows "finding your matches" until this has run.
+const CHECK_MS = 5_000;
 /** On start, also catch saves from just before a restart. Re-running is safe: (userId, jobId) is unique. */
 const STARTUP_LOOKBACK_MS = 10 * 60_000;
 
@@ -43,6 +44,11 @@ export class BackfillWatcher {
           log.error({ user: row.userId, err: String(err) }, "backfill failed");
           return 0;
         });
+        // Done matching this save (the feed stops showing "finding matches"). Raw SQL so updatedAt, which this
+        // watcher reads as a save, doesn't move; set to the save's own time so a newer save still counts as pending.
+        await prisma.$executeRaw`UPDATE "UserPreferences" SET "matchedAt" = ${row.updatedAt} WHERE "userId" = ${row.userId} AND ("matchedAt" IS NULL OR "matchedAt" < ${row.updatedAt})`.catch(
+          (err: unknown) => log.error({ user: row.userId, err: String(err) }, "matchedAt not saved"),
+        );
         this.cursor = row.updatedAt;
       }
       if (queued) this.onQueued();

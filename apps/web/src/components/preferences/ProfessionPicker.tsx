@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Check, ChevronDown, Loader2, Plus } from "lucide-react";
+import { Check, ChevronDown, Loader2, Minus, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { PlanLimits, ProfessionDto, TaxonomyDto } from "@ethio/shared";
 import { search } from "@/lib/search";
@@ -16,12 +16,23 @@ interface Props {
   taxonomy: TaxonomyDto;
   professionIds: string[];
   functionIds: string[];
+  /** Roles left out of followed categories. */
+  excludedIds: string[];
   limits: PlanLimits;
-  onChange: (next: { professionIds: string[]; functionIds: string[] }) => void;
+  onChange: (next: { professionIds: string[]; functionIds: string[]; excludedProfessionIds: string[] }) => void;
 }
 
-/** Pick specific professions (search or browse) and/or whole categories. */
-export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits, onChange }: Props) {
+/** "Any Accounting & Finance job", or "Accounting & Finance: 15 of 17 roles" when some are left out. */
+export function categoryLabel(name: string, roles: readonly string[], excluded: readonly string[]): string {
+  const off = roles.filter((r) => excluded.includes(r)).length;
+  return off ? `${name}: ${roles.length - off} of ${roles.length} roles` : `Any ${name} job`;
+}
+
+/**
+ * Pick whole categories and/or specific professions (search or browse). A followed category has every
+ * role on; unticking roles leaves them out (stored as exclusions, so it never uses up role slots).
+ */
+export function ProfessionPicker({ taxonomy, professionIds, functionIds, excludedIds, limits, onChange: emit }: Props) {
   const [query, setQuery] = useState("");
   const [openFunction, setOpenFunction] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -48,28 +59,59 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
     if (!paywall.gate(reason)) haptic.error();
   };
 
+  // Every change carries all three lists; exclusions only live inside followed categories.
+  const onChange = (next: { professionIds: string[]; functionIds: string[]; excludedProfessionIds?: string[] }) =>
+    emit({ ...next, excludedProfessionIds: next.excludedProfessionIds ?? excludedIds });
+  const rolesOf = (fn: string) => functionsById.get(fn)?.professions.map((p) => p.id) ?? [];
+  const isOn = (id: string) => {
+    const fn = byId.get(id)?.functionId;
+    return professionIds.includes(id) || (!!fn && functionIds.includes(fn) && !excludedIds.includes(id));
+  };
+
   const toggleProfession = (id: string) => {
     const fn = byId.get(id)?.functionId;
-    // Narrowing down: picking a role inside a followed category switches that category to specific roles.
+    // Inside a followed category every role is on: tapping one leaves it out, or brings it back.
     if (fn && functionIds.includes(fn)) {
-      if (professionsFull) return blocked("professions");
       haptic.select();
-      return onChange({ professionIds: [...professionIds, id], functionIds: functionIds.filter((f) => f !== fn) });
+      if (excludedIds.includes(id)) return onChange({ professionIds, functionIds, excludedProfessionIds: excludedIds.filter((x) => x !== id) });
+      const excluded = [...excludedIds, id];
+      const roles = rolesOf(fn);
+      // Every role left out: that's no longer following the category.
+      if (roles.every((r) => excluded.includes(r))) {
+        return onChange({ professionIds, functionIds: functionIds.filter((f) => f !== fn), excludedProfessionIds: excluded.filter((x) => !roles.includes(x)) });
+      }
+      return onChange({ professionIds, functionIds, excludedProfessionIds: excluded });
     }
     if (!professionIds.includes(id) && professionsFull) return blocked("professions");
     haptic.select();
     onChange({ professionIds: toggle(professionIds, id), functionIds });
   };
+
   /** The default action: follow every job in a category (its specific roles fold into it). */
   const toggleFunction = (id: string) => {
+    const inside = new Set(rolesOf(id));
     if (functionIds.includes(id)) {
       haptic.select();
-      return onChange({ professionIds, functionIds: functionIds.filter((f) => f !== id) });
+      return onChange({ professionIds, functionIds: functionIds.filter((f) => f !== id), excludedProfessionIds: excludedIds.filter((x) => !inside.has(x)) });
     }
     if (categoriesLocked || functionsFull) return blocked("categories");
     haptic.select();
-    const inside = new Set(functionsById.get(id)?.professions.map((p) => p.id) ?? []);
-    onChange({ professionIds: professionIds.filter((p) => !inside.has(p)), functionIds: [...functionIds, id] });
+    onChange({
+      professionIds: professionIds.filter((p) => !inside.has(p)),
+      functionIds: [...functionIds, id],
+      excludedProfessionIds: excludedIds.filter((x) => !inside.has(x)),
+    });
+  };
+
+  /** "Select all in this category": every role on (follow it whole), or all off when they already are. */
+  const selectAll = (id: string) => {
+    const inside = new Set(rolesOf(id));
+    const followed = functionIds.includes(id);
+    if (followed && excludedIds.some((x) => inside.has(x))) {
+      haptic.select();
+      return onChange({ professionIds, functionIds, excludedProfessionIds: excludedIds.filter((x) => !inside.has(x)) });
+    }
+    toggleFunction(id);
   };
 
   // "Not listed": the server maps the typed title to the closest professions (saved answer, local match, then AI).
@@ -80,7 +122,7 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
       { kind: "profession", text },
       {
         onSuccess: ({ ids }) => {
-          const known = ids.filter((id) => byId.has(id) && !professionIds.includes(id));
+          const known = ids.filter((id) => byId.has(id) && !isOn(id));
           if (!known.length) {
             haptic.error();
             setNotice(`We couldn't match "${text}". Try another word, or browse the categories below.`);
@@ -108,7 +150,7 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
           ))}
           {functionIds.map((id, i) => (
             <Chip key={`f:${id}`} inactive={i >= limits.maxFunctions} onRemove={() => toggleFunction(id)}>
-              Any {functionsById.get(id)?.name ?? id} job
+              {categoryLabel(functionsById.get(id)?.name ?? id, rolesOf(id), excludedIds)}
             </Chip>
           ))}
         </ChipGroup>
@@ -120,7 +162,7 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
           setQuery(v);
           setNotice(null);
         }}
-        placeholder="Search a job title, e.g. Accountant, Nurse, ሹፌር"
+        placeholder="Search a job title, e.g. Accountant, Nurse, Driver"
       />
       {notice && <p className="text-[13px] text-hint">{notice}</p>}
 
@@ -143,13 +185,14 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
         <ul className="-mx-1 flex flex-col">
           {results.length === 0 && <li className="px-1 pt-3 text-sm text-hint">No exact match.</li>}
           {results.map((p) => {
-            const selected = professionIds.includes(p.id);
+            const selected = isOn(p.id);
+            const inWhole = functionIds.includes(p.functionId);
             return (
               <li key={p.id}>
                 <button
                   type="button"
                   onClick={() => toggleProfession(p.id)}
-                  className={clsx("flex w-full items-center justify-between gap-3 rounded-lg px-1 py-2.5 text-left", !selected && professionsFull && "opacity-40")}
+                  className={clsx("flex w-full items-center justify-between gap-3 rounded-lg px-1 py-2.5 text-left", !selected && !inWhole && professionsFull && "opacity-40")}
                 >
                   <span>
                     <span className="block text-[15px]">{p.name}</span>
@@ -193,11 +236,13 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
                 name={f.name}
                 professions={f.professions}
                 whole={functionIds.includes(f.id)}
+                isOn={isOn}
                 pickedIds={professionIds}
                 open={openFunction === f.id}
                 dimmed={!functionIds.includes(f.id) && (categoriesLocked || functionsFull)}
                 professionsFull={professionsFull}
                 onToggleWhole={() => toggleFunction(f.id)}
+                onSelectAll={() => selectAll(f.id)}
                 onToggleOpen={() => setOpenFunction(openFunction === f.id ? null : f.id)}
                 onToggleProfession={toggleProfession}
               />
@@ -211,18 +256,21 @@ export function ProfessionPicker({ taxonomy, professionIds, functionIds, limits,
 
 /**
  * One category. The row itself selects the whole category (the default: jobs are scarce, so
- * following all of it is usually right). The chevron opens specific roles for narrowing down.
+ * following all of it is usually right). The chevron opens its roles: "Select all in …" first,
+ * then every role, all ticked when the category is followed so people can untick what they don't want.
  */
 function CategoryRow({
   id,
   name,
   professions,
   whole,
+  isOn,
   pickedIds,
   open,
   dimmed,
   professionsFull,
   onToggleWhole,
+  onSelectAll,
   onToggleOpen,
   onToggleProfession,
 }: {
@@ -230,16 +278,20 @@ function CategoryRow({
   name: string;
   professions: ProfessionDto[];
   whole: boolean;
+  isOn: (id: string) => boolean;
   pickedIds: string[];
   open: boolean;
   dimmed: boolean;
   professionsFull: boolean;
   onToggleWhole: () => void;
+  onSelectAll: () => void;
   onToggleOpen: () => void;
   onToggleProfession: (id: string) => void;
 }) {
   const picked = professions.filter((p) => pickedIds.includes(p.id)).length;
-  const state = whole ? "All roles" : picked ? `${picked} specific ${picked === 1 ? "role" : "roles"}` : null;
+  const on = professions.filter((p) => isOn(p.id)).length;
+  const allOn = whole && on === professions.length;
+  const state = whole ? (allOn ? "All roles" : `${on} of ${professions.length} roles`) : picked ? `${picked} specific ${picked === 1 ? "role" : "roles"}` : null;
   return (
     <li className={clsx("overflow-hidden rounded-xl border transition-colors", whole ? "border-ink bg-surface" : picked ? "border-accent-border bg-surface" : "border-separator bg-surface")}>
       <div className="flex items-center">
@@ -249,7 +301,7 @@ function CategoryRow({
           </span>
           <span className="min-w-0 flex-1">
             <span className={clsx("block truncate text-[15px]", (whole || picked > 0) && "font-semibold")}>{name}</span>
-            {state && <span className={clsx("block text-[12px]", whole ? "text-hint" : "text-accent-strong")}>{state}</span>}
+            {state && <span className={clsx("block text-[12px]", allOn ? "text-hint" : "text-accent-strong")}>{state}</span>}
           </span>
           <span
             className={clsx(
@@ -257,7 +309,7 @@ function CategoryRow({
               whole ? "border-ink bg-ink text-white" : "border-separator text-transparent",
             )}
           >
-            <Check className="size-3.5" strokeWidth={3} />
+            {whole && !allOn ? <Minus className="size-3.5" strokeWidth={3} /> : <Check className="size-3.5" strokeWidth={3} />}
           </span>
         </button>
         <button
@@ -272,12 +324,34 @@ function CategoryRow({
       </div>
       {open && (
         <div className="border-t border-separator-subtle px-3 pb-3 pt-2.5">
-          <p className="mb-2 text-[12px] text-hint">
-            {whole ? "You get every role here. Tap roles to narrow it down instead." : "Pick only the roles you want, or tap the category above for all of them."}
-          </p>
+          <button
+            type="button"
+            onClick={onSelectAll}
+            aria-pressed={allOn}
+            className={clsx("mb-2.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors", allOn ? "border-ink bg-surface" : "border-separator bg-neutral-50", dimmed && "opacity-60")}
+          >
+            <span
+              className={clsx(
+                "grid size-5 shrink-0 place-items-center rounded-md border transition-colors",
+                whole ? "border-ink bg-ink text-white" : "border-separator bg-surface text-transparent",
+              )}
+            >
+              {whole && !allOn ? <Minus className="size-3.5" strokeWidth={3} /> : <Check className="size-3.5" strokeWidth={3} />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold">Select all in this category</span>
+              <span className="block text-[12px] text-hint">Every {name} job, including new roles</span>
+            </span>
+          </button>
+          <p className="mb-2 text-[12px] text-hint">{whole ? "Untick any role you don't want." : "Or pick only the roles you want."}</p>
           <ChipGroup>
             {professions.map((p) => (
-              <Chip key={p.id} selected={pickedIds.includes(p.id)} muted={!pickedIds.includes(p.id) && professionsFull} onClick={() => onToggleProfession(p.id)}>
+              <Chip
+                key={p.id}
+                selected={isOn(p.id)}
+                muted={!whole && !pickedIds.includes(p.id) && professionsFull}
+                onClick={() => onToggleProfession(p.id)}
+              >
                 {p.name}
               </Chip>
             ))}

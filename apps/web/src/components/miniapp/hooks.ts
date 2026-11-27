@@ -23,6 +23,8 @@ export function useSavePreferences() {
     mutationFn: (input: PreferencesInput) => api.savePreferences(token, input),
     onSuccess: (prefs) => {
       qc.setQueryData(["preferences"], prefs);
+      // New preferences mean new matches: the feed asks again (and shows "finding matches" meanwhile).
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
       if (!me.onboarded) setMe({ ...me, onboarded: true });
     },
   });

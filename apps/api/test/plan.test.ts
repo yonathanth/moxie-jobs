@@ -27,7 +27,7 @@ describe("resolveLimits", () => {
   });
 
   it("free: 10 alerts a day, no premium jobs, no categories; paid plans unlimited with premium jobs", () => {
-    expect(DEFAULT_PLAN_LIMITS.free).toMatchObject({ dailyJobCap: 10, premiumJobs: false, maxFunctions: 3, maxProfessions: 10 });
+    expect(DEFAULT_PLAN_LIMITS.free).toMatchObject({ dailyJobCap: 5, premiumJobs: false, maxFunctions: 3, maxProfessions: 10 });
     expect(DEFAULT_PLAN_LIMITS.pro).toMatchObject({ dailyJobCap: null, premiumJobs: true });
   });
 

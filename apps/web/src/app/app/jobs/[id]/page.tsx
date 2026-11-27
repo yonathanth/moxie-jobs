@@ -12,7 +12,8 @@ import { SaveButton, ShareButton } from "@/components/jobs/JobActions";
 import { daysLeft, postedAgo } from "@/components/jobs/JobCard";
 import { useBackButton, useJob } from "@/components/miniapp/hooks";
 import { usePaywall } from "@/components/paywall";
-import { Badge, Button, Card, CenteredMessage, IconTile, StickyFooter } from "@/components/ui";
+import { Badge, Button, Card, CenteredMessage, Dialog, IconTile, StickyFooter } from "@/components/ui";
+import { useSession } from "@/components/miniapp/session";
 import { formatDate } from "@/lib/plans";
 import { haptic, openExternal } from "@/lib/telegram";
 
@@ -93,7 +94,7 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
       )}
       <div className="flex flex-wrap items-center gap-2 px-1">
         {job.employerLabel && <Badge tone={job.locked ? "accent" : "neutral"}>{job.employerLabel}</Badge>}
-        {job.match === "waiting" && <Badge>Over today&apos;s alert limit</Badge>}
+        {job.lockReason === "daily_limit" && <Badge>Opens tomorrow</Badge>}
         <span className="text-xs text-hint-light">Posted {postedAgo(job.firstSeenAt).toLowerCase()}</span>
       </div>
       <h1 className="mt-2 px-1 text-[24px] font-bold leading-tight tracking-tight">{job.title}</h1>
@@ -103,7 +104,9 @@ function JobView({ job, wantsCv }: { job: JobCardDto; wantsCv: boolean }) {
         <ShareButton job={job} variant="pill" />
       </div>
 
-      {job.locked ? (
+      {job.lockReason === "daily_limit" ? (
+        <HeldPanel onUpgrade={() => paywall.gate("daily_cap")} />
+      ) : job.locked ? (
         <Card className="mt-5 border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#ffffff_70%)]">
           <div className="flex items-start gap-3">
             <IconTile>
@@ -269,6 +272,68 @@ function HowToApply({ job }: { job: JobCardDto }) {
           Open application page
           <ExternalLink className="size-3.5" />
         </button>
+      )}
+    </>
+  );
+}
+
+/**
+ * A match over today's free alert limit: the details stay hidden until tomorrow (Addis Ababa), or now with Pro.
+ * Opening it asks right away; the panel stays on the page after the prompt is closed.
+ */
+function HeldPanel({ onUpgrade }: { onUpgrade: () => void }) {
+  const router = useRouter();
+  const { me } = useSession();
+  const [prompt, setPrompt] = useState(true);
+  const cap = me.limits.dailyJobCap ?? 5;
+  const body = `You've seen today's ${cap} free jobs. This one opens for free tomorrow, or see the employer and how to apply now with Pro.`;
+  const upgrade = () => {
+    setPrompt(false);
+    onUpgrade();
+  };
+  return (
+    <>
+      <Card className="mt-5 border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#ffffff_70%)]">
+        <div className="flex items-start gap-3">
+          <IconTile>
+            <Clock className="size-5" />
+          </IconTile>
+          <div>
+            <p className="text-[15px] font-semibold">Over today&apos;s free limit</p>
+            <p className="mt-1 text-[13px] text-hint">{body}</p>
+          </div>
+        </div>
+        <div className="mt-4">
+          <Button variant="accent" onClick={upgrade}>
+            See it now with Pro
+          </Button>
+        </div>
+      </Card>
+      {prompt && (
+        <Dialog
+          labelId="held-job-title"
+          onClose={() => setPrompt(false)}
+          icon={
+            <IconTile>
+              <Clock className="size-5" />
+            </IconTile>
+          }
+          title="This job opens tomorrow"
+          body={body}
+        >
+          <Button variant="accent" onClick={upgrade}>
+            See it now with Pro
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setPrompt(false);
+              router.push("/app/jobs?scope=for_you");
+            }}
+          >
+            I&apos;ll see it tomorrow
+          </Button>
+        </Dialog>
       )}
     </>
   );

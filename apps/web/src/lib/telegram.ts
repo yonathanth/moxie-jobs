@@ -115,19 +115,30 @@ export function prepareWebApp() {
   wa.setBottomBarColor?.("#fdfdfd");
 }
 
-/**
- * People who open the Mini App straight from a link (share links, the bot's Open button) never pressed
- * Start, and Telegram won't let the bot message them: every alert would fail. If Telegram says the bot
- * can't write to them yet, ask once ("Allow Meklit Jobs to message you?"). Not again for a week if they decline.
- */
-export function askToAllowMessages(): void {
+/** Telegram already says the bot may message them (set in the launch data once they started it or allowed it). */
+export function messagesAllowedAtLaunch(): boolean {
+  return getWebApp()?.initDataUnsafe.user?.allows_write_to_pm === true;
+}
+
+/** Whether this Telegram app can show the "Allow messages" prompt (Bot API 6.9+). */
+export function canRequestMessages(): boolean {
   const wa = getWebApp();
-  if (!wa?.requestWriteAccess || !wa.isVersionAtLeast?.("6.9")) return;
-  if (wa.initDataUnsafe.user?.allows_write_to_pm) return;
-  try {
-    const at = Number(localStorage.getItem("wa:asked") ?? 0);
-    if (Date.now() - at < 7 * 24 * 3_600_000) return;
-    localStorage.setItem("wa:asked", String(Date.now()));
-  } catch {}
-  wa.requestWriteAccess();
+  return !!wa?.requestWriteAccess && !!wa.isVersionAtLeast?.("6.9");
+}
+
+/**
+ * Telegram's "Allow <bot> to message you?" prompt. People who open the Mini App straight from a link never
+ * pressed Start, and every alert to them fails until they allow it. Resolves true if allowed (immediately,
+ * with no prompt, when it already is), false if declined.
+ */
+export function requestMessages(): Promise<boolean> {
+  const wa = getWebApp();
+  if (!wa?.requestWriteAccess || !canRequestMessages()) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    try {
+      wa.requestWriteAccess!((granted) => resolve(granted));
+    } catch {
+      resolve(false);
+    }
+  });
 }

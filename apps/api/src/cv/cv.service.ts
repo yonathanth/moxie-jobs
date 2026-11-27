@@ -299,6 +299,13 @@ export class CvService {
   /* ---------- delivery ---------- */
 
   /** Sends the PDF to the person's Telegram chat (watermarked while unpaid). */
+  /** The Mini App's Download: the clean PDF to the chat. Locked CVs are downloaded by unlocking them, never as a watermarked preview. */
+  async download(user: User, id: string): Promise<{ sent: boolean; watermarked: boolean }> {
+    const doc = await this.owned(user, id);
+    if (doc.charge === "locked") throw new PaywallException("Get a CV pack to download this CV.");
+    return this.sendPdf(user, doc.id);
+  }
+
   async sendPdf(user: Pick<User, "id" | "telegramId">, id: string): Promise<{ sent: boolean; watermarked: boolean }> {
     const doc = await this.prisma.cvDocument.findUnique({ where: { id } });
     if (!doc || doc.deletedAt || doc.userId !== user.id) throw new NotFoundException("CV not found");

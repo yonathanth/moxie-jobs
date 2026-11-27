@@ -3,6 +3,7 @@ import type { PlanLimits, Preferences, PreferencesDto } from "@ethio/shared";
 export const EMPTY_PREFERENCES: Preferences = {
   professionIds: [],
   functionIds: [],
+  excludedProfessionIds: [],
   fieldOfStudyIds: [],
   educationLevel: null,
   experienceBand: null,
@@ -18,7 +19,7 @@ export const EMPTY_PREFERENCES: Preferences = {
 export function fromDto(dto: PreferencesDto | null | undefined): Preferences {
   if (!dto) return EMPTY_PREFERENCES;
   const { updatedAt: _updatedAt, ...prefs } = dto;
-  return prefs;
+  return { ...prefs, excludedProfessionIds: prefs.excludedProfessionIds ?? [] };
 }
 
 export function hasTarget(p: Preferences): boolean {

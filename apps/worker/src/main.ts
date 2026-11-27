@@ -5,6 +5,7 @@ import { matchAndQueue } from "./delivery/matcher";
 import { Sender } from "./delivery/sender";
 import { OnboardingNudge } from "./delivery/nudge";
 import { Promoter } from "./delivery/promo";
+import { MissedDigest } from "./delivery/digest";
 import { Extractor } from "./ai/extract";
 import { prisma } from "./db";
 import { env } from "./env";
@@ -33,10 +34,13 @@ async function main() {
   // Marketing pictures in two daily slots (replaces the old 18:00 summary).
   const promoter = new Promoter();
   const nudge = new OnboardingNudge();
+  // Free users: the jobs they missed yesterday, every morning.
+  const digest = new MissedDigest();
   if (e.DELIVERY_ENABLED) {
     sender.start();
     promoter.start();
     nudge.start();
+    digest.start();
   }
   else log.warn("delivery disabled (DELIVERY_ENABLED=false): jobs are matched but not sent");
 
@@ -93,6 +97,7 @@ async function main() {
     await listener?.stop().catch(() => undefined);
     await pipeline.stop();
     promoter.stop();
+    digest.stop();
     nudge.stop();
     await sender.stop();
     await prisma.$disconnect();

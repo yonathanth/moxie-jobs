@@ -28,7 +28,7 @@ import { APP_NAME } from "@/lib/config";
  * never free text, so the route can't be used to print arbitrary words on our brand.
  *
  *   /og/msg/upgrade?price=199    /og/msg/cv     /og/msg/packs?p=99,199,349
- *   /og/msg/cap?n=4&cap=10       /og/msg/premium?job=<id>
+ *   /og/msg/cap?n=4&cap=10       /og/msg/premium?job=<id>    /og/msg/missed?n=12
  *   /og/msg/welcome  /og/msg/setup  /og/msg/allset
  *   /og/msg/plan?plan=pro&until=2026-12-25   /og/msg/renew?plan=pro&until=…[&lapsed=1]
  */
@@ -123,13 +123,32 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
       );
     }
 
+    case "missed": {
+      const n = int(q.get("n"), 1, 999, 3);
+      return cardResponse(
+        <Frame badge={{ text: "Yesterday" }} footer={{ note: "Pro sends every match the moment it's posted", cta: "See jobs" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <Headline size={62} max={560}>{`You missed ${n} matching ${n === 1 ? "job" : "jobs"}`}</Headline>
+              <Sub max={540}>They matched you yesterday but weren&apos;t sent in full. Most are still open.</Sub>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {[0, 1, 2].map((i) => (
+                <LockedRow key={i} faded={i > 0} />
+              ))}
+            </div>
+          </div>
+        </Frame>,
+      );
+    }
+
     case "premium": {
       const job = await getPublicJob(q.get("job") ?? "");
-      const title = job?.title ?? "A premium job matched you";
+      const title = job?.title ?? "An NGO, embassy or international job matched you";
       const facts = job ? [job.location, job.deadline && !job.closed ? `Apply by ${shortDate(job.deadline)}` : null].filter((x): x is string => !!x) : [];
       return cardResponse(
         <Frame
-          badge={{ text: "Premium match" }}
+          badge={{ text: "Matched to you" }}
           footer={{
             note: (
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -217,7 +236,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
           {/* eslint-disable-next-line @next/next/no-img-element -- next/og */}
           <img src={ICONS.clock()} width={56} height={56} alt="" />
           <Headline size={64} max={900}>{lapsed ? `Your ${PLAN_NAME[plan]} has ended` : `Your ${PLAN_NAME[plan]} ends ${until ? `on ${until}` : "soon"}`}</Headline>
-          <Sub>{lapsed ? "Premium jobs and unlimited alerts are paused until you renew." : "Renew to keep every alert and premium job coming."}</Sub>
+          <Sub>{lapsed ? "NGO, embassy and international jobs and unlimited alerts are paused until you renew." : "Renew to keep every alert and NGO, embassy and international job coming."}</Sub>
         </Frame>,
       );
     }
@@ -264,7 +283,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
 
     case "intl":
       return cardResponse(
-        <Frame badge={{ text: "Premium jobs" }} footer={{ note: "Matched to you, the moment they're posted", cta: "See these jobs" }}>
+        <Frame badge={{ text: "NGO & embassy jobs" }} footer={{ note: "Matched to you, the moment they're posted", cta: "See these jobs" }}>
           <Headline size={62} max={960}>NGO, UN, embassy and international jobs</Headline>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 34, maxWidth: 1000 }}>
             {["NGOs", "UN agencies", "Embassies", "International companies", "Jobs abroad"].map((c) => (

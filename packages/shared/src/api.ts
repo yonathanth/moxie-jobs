@@ -121,6 +121,8 @@ export interface JobCardDto {
   title: string;
   /** Premium job the user's plan doesn't include: details are withheld. */
   locked: boolean;
+  /** Why it's locked: a kind of job the plan doesn't include ("premium"), or a match over today's free alert limit (opens tomorrow). */
+  lockReason: "premium" | "daily_limit" | null;
   /** NGO, UN/AU/embassy, foreign company or overseas: shares never name the employer. */
   premium: boolean;
   /** Why it's in "For you": sent as an alert, held by the daily limit, or locked (premium). */
@@ -184,12 +186,19 @@ export interface JobFeedQuery {
   limit?: number;
 }
 
+/** GET /me/messaging: whether the bot can message them (null = unknown, e.g. the bot is off in local dev). */
+export interface MessagingStatusDto {
+  canMessage: boolean | null;
+}
+
 export interface JobFeedPage {
   items: JobCardDto[];
   /** Opaque; pass back as `cursor` for the next page. Null at the end. */
   nextCursor: string | null;
   /** First page only: how many locked (premium) matches the plan hides, for the upsell row. */
   lockedCount?: number;
+  /** "For you", first page: the worker is still matching their latest preferences (just set up or edited). Poll until false. */
+  matching?: boolean;
 }
 
 /** A shared job link (public, no sign-in): enough to want it; applying happens in the bot. */
@@ -279,7 +288,7 @@ export interface AdminSourceDto {
 export interface AdminSettingsDto {
   betaAllPro: boolean;
   unpaidJobs: "label" | "exclude";
-  delivery: { maxJobAgeHours: number; teaserHourEat: number; quietFromEat: number; quietToEat: number };
+  delivery: { maxJobAgeHours: number; digestHourEat: number; quietFromEat: number; quietToEat: number };
   prices: PriceTable;
   planLimits: Record<Plan, PlanLimits>;
   cvPackPrices: Record<CvPackId, number>;

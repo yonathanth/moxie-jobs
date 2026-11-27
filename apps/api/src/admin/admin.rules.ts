@@ -44,7 +44,7 @@ export const settingsUpdateSchema = z
     delivery: z
       .object({
         maxJobAgeHours: z.number().int().min(1).max(168),
-        teaserHourEat: z.number().int().min(0).max(23),
+        digestHourEat: z.number().int().min(0).max(23),
         quietFromEat: z.number().int().min(0).max(23),
         quietToEat: z.number().int().min(0).max(23),
       })

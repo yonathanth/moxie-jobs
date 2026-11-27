@@ -46,6 +46,9 @@ const DAY_MS = 24 * 3_600_000;
 export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
   const paywall = usePaywall();
   const href = `/app/jobs/${job.id}${from ? `?from=${encodeURIComponent(from)}` : ""}`;
+  // Kinds of jobs the plan lacks open the paywall; matches over today's limit open their page (which explains).
+  const premiumLock = job.lockReason === "premium" || (job.locked && job.lockReason == null);
+  const held = job.lockReason === "daily_limit";
   const fresh = !job.locked && Date.now() - new Date(job.firstSeenAt).getTime() < DAY_MS;
 
   const top = (
@@ -54,21 +57,21 @@ export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
         <span
           className={clsx(
             "grid size-10 shrink-0 place-items-center rounded-xl border",
-            job.locked ? "border-accent-border bg-surface text-accent-strong" : "border-separator bg-neutral-50 text-accent-strong/80",
+            premiumLock ? "border-accent-border bg-surface text-accent-strong" : held ? "border-separator bg-neutral-50 text-hint" : "border-separator bg-neutral-50 text-accent-strong/80",
           )}
         >
-          {job.locked ? <Lock className="size-[18px]" /> : <CategoryIcon id={job.functionId ?? "other"} className="size-[18px]" />}
+          {premiumLock ? <Lock className="size-[18px]" /> : held ? <Clock className="size-[18px]" /> : <CategoryIcon id={job.functionId ?? "other"} className="size-[18px]" />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h3 className="min-w-0 text-[15px] font-semibold leading-snug">{job.title}</h3>
-            {job.locked ? (
+            {premiumLock ? (
               <Badge tone="accent">
                 <Lock className="size-3" />
                 Pro
               </Badge>
-            ) : job.match === "waiting" ? (
-              <Badge tone="neutral">Over today&apos;s limit</Badge>
+            ) : held || job.match === "waiting" ? (
+              <Badge tone="neutral">Opens tomorrow</Badge>
             ) : fresh ? (
               <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-strong">
                 <span className="size-1.5 rounded-full bg-accent" />
@@ -77,10 +80,12 @@ export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
             ) : null}
           </div>
           <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[13px] text-hint">
-            {job.locked ? (
+            {held ? (
+              <span className="truncate">Over today&apos;s free limit: free tomorrow, or now with Pro</span>
+            ) : premiumLock ? (
               <>
                 <Building2 className="size-3.5 shrink-0" />
-                <span className="truncate">{job.employerLabel ?? "Premium employer"}: details with Pro</span>
+                <span className="truncate">{job.employerLabel ?? "NGO or international employer"}: details with Pro</span>
               </>
             ) : (
               <span className="truncate">{[job.company, job.employerLabel].filter(Boolean).join(" · ") || "Employer not stated"}</span>
@@ -106,10 +111,10 @@ export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
     <article
       className={clsx(
         "overflow-hidden rounded-2xl border bg-surface shadow-[0_10px_28px_-24px_rgba(15,17,21,0.35)]",
-        job.locked ? "border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#ffffff_70%)]" : "border-separator",
+        premiumLock ? "border-accent-border bg-[linear-gradient(120deg,var(--accent-soft)_0%,#ffffff_70%)]" : "border-separator",
       )}
     >
-      {job.locked ? (
+      {premiumLock ? (
         <button type="button" className="block w-full text-left transition-colors active:bg-accent-soft/60" onClick={() => paywall.gate("premium_job", { then: href })}>
           {top}
         </button>
@@ -121,7 +126,7 @@ export function JobCard({ job, from }: { job: JobCardDto; from?: string }) {
       <div className="flex items-center gap-0.5 border-t border-separator-subtle px-2 py-1.5">
         <SaveButton job={job} />
         <ShareButton job={job} />
-        {job.locked ? (
+        {premiumLock ? (
           <button
             type="button"
             onClick={() => paywall.gate("premium_job", { then: href })}

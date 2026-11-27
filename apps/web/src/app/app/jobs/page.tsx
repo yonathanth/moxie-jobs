@@ -74,6 +74,13 @@ function Feed() {
     return (feed.data?.pages.flatMap((p) => p.items) ?? []).filter((j) => !seen.has(j.id) && seen.add(j.id));
   }, [feed.data]);
   const lockedCount = feed.data?.pages[0]?.lockedCount ?? 0;
+  // Just set up or edited preferences: the worker is still matching. Show that (not "no matches") and ask again.
+  const matching = state.scope === "for_you" && !feed.isPlaceholderData && !!feed.data?.pages[0]?.matching;
+  useEffect(() => {
+    if (!matching) return;
+    const t = setInterval(() => void feed.refetch(), 3000);
+    return () => clearInterval(t);
+  }, [matching, feed]);
   const filterCount = activeFilterCount(state);
   const cityName = useMemo(() => new Map((taxonomy.data?.cities ?? []).map((c) => [c.id, c.name])), [taxonomy.data]);
 
@@ -200,6 +207,8 @@ function Feed() {
               <Button onClick={() => void feed.refetch()}>Try again</Button>
             </div>
           </div>
+        ) : items.length === 0 && matching ? (
+          <FindingMatches />
         ) : items.length === 0 ? (
           <EmptyState
             scope={state.scope}
@@ -212,6 +221,12 @@ function Feed() {
           />
         ) : (
           <div ref={listRef} className={clsx("transition-opacity", feed.isPlaceholderData && "opacity-60")}>
+            {matching && (
+              <p className="mb-3 flex items-center justify-center gap-2 text-[13px] text-hint">
+                <Spinner size="xs" />
+                Finding more jobs that match you
+              </p>
+            )}
             <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
               {virtualItems.map((v) => (
                 <div
@@ -255,6 +270,24 @@ function Feed() {
         </Portal>
       )}
     </main>
+  );
+}
+
+/** While the first matches are being found: a calm loading state instead of "No matches yet". */
+function FindingMatches() {
+  return (
+    <div>
+      <div className="flex flex-col items-center py-6 text-center">
+        <Spinner />
+        <p className="mt-3 font-semibold">Finding jobs that match you</p>
+        <p className="mx-auto mt-1 max-w-xs text-sm text-hint">This takes a few seconds. They&apos;ll show here and in your chat with the bot.</p>
+      </div>
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <JobCardSkeleton key={i} />
+        ))}
+      </div>
+    </div>
   );
 }
 

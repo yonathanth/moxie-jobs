@@ -84,6 +84,11 @@ model UserPreferences {
   salaryMax       Int?
   // Last daily summary sent (free plan: held-back matches); one per day.
   lastBatchAt     DateTime?
+  // Roles skipped inside a followed whole category ("all of Accounting except Cashier"). Profession ids.
+  excludedProfessionIds String[] @default([])
+  // When the worker last finished matching these preferences (the backfill). Behind updatedAt = still matching.
+  // Written with raw SQL so it doesn't bump updatedAt.
+  matchedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

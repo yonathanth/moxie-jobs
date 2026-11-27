@@ -9,8 +9,10 @@ import {
   applyHowText,
   applyTarget,
   buildCard,
-  capPromo,
   cvPromo,
+  kindMatchPreview,
+  missedDigest,
+  overLimitPreview,
   employerLabel,
   isPremiumJob,
   locationText,
@@ -23,6 +25,8 @@ import {
   setupReminderText,
   upgradePromo,
   type BotPhotoMessage,
+  type InlineButton,
+  type PreviewLinks,
   SHARE_APP_MESSAGES,
   type ShareAppKind,
 } from "@ethio/shared";
@@ -82,6 +86,31 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
 
   async onModuleDestroy() {
     if (this.polling) await this.bot.stop();
+  }
+
+  /**
+   * Whether the bot can write to this person: a "typing" action succeeds only if they started the bot or
+   * allowed messages (400 "chat not found" otherwise, 403 if they blocked it). Null when the bot is off
+   * or Telegram didn't answer.
+   */
+  async canMessage(telegramId: bigint): Promise<boolean | null> {
+    if (!this.enabled) return null;
+    try {
+      await this.bot.api.sendChatAction(Number(telegramId), "typing");
+      return true;
+    } catch (err) {
+      if (err instanceof GrammyError && (err.error_code === 400 || err.error_code === 403)) return false;
+      this.logger.warn(`canMessage ${telegramId}: ${String(err)}`);
+      return null;
+    }
+  }
+
+  /**
+   * They can be messaged now (allowed in the Mini App, pressed Start): touching their preferences makes the
+   * worker re-run its backfill, which re-sends the matches that failed with "chat not found".
+   */
+  async messagesAllowed(userId: string): Promise<void> {
+    await this.prisma.userPreferences.updateMany({ where: { userId }, data: { updatedAt: new Date() } });
   }
 
   /** Sends a message to a user; marks them as blocked when Telegram says so. Returns false if not delivered. */
@@ -244,7 +273,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       this.bot.api.sendMessage(chat, `<b>${n}. ${M.escapeHtml(what)}</b>\n<i>${M.escapeHtml(when)}</i>`, { parse_mode: "HTML" });
     const until = new Date(Date.now() + 30 * 24 * 3_600_000);
     const soon = new Date(Date.now() + 2 * 24 * 3_600_000);
-    const freeCap = resolveLimits("free", settings).dailyJobCap ?? 10;
+    const freeCap = resolveLimits("free", settings).dailyJobCap ?? 5;
 
     await this.bot.api.sendMessage(
       chat,
@@ -274,9 +303,34 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     const packs = packsPromo(resolveCvPackPrices(settings));
     await label(++n, "B2 · CV packs", "Marketing slot, anyone out of CVs (free or paid)");
     await this.sendPhoto(chat, packs.image, photo(packs));
-    const cap = capPromo(4, freeCap);
-    await label(++n, "C · Alert limit reached", "Marketing slot, free users held back by the daily limit today");
-    await this.sendPhoto(chat, cap.image, photo(cap));
+    // Free plan previews (worker sender / digest): over the daily limit, a kind of job the plan lacks, and the morning list.
+    const links: PreviewLinks = { app: web, bot: `https://t.me/${this.env.TELEGRAM_BOT_USERNAME}` };
+    const inline = (buttons: InlineButton[][]) => (buttons.length ? { inline_keyboard: buttons as never } : undefined);
+    if (job) {
+      const over = overLimitPreview({ id: job.id, title: job.title, employerLabel: employerLabel(job.employerType), location: locationText(job), deadline: job.deadline }, freeCap, links);
+      await label(++n, "Over today's limit", `Free users, each match after the first ${freeCap} of the day (job opens in the app tomorrow)`);
+      await this.bot.api.sendMessage(chat, over.text, { parse_mode: "HTML", reply_markup: inline(over.buttons), link_preview_options: { is_disabled: true } });
+    }
+    if (premium) {
+      const p = kindMatchPreview(
+        { id: premium.id, title: premium.title, employerLabel: employerLabel(premium.employerType), location: locationText(premium), deadline: premium.deadline, employerType: premium.employerType, isOverseas: premium.isOverseas },
+        links,
+      );
+      await label(++n, "NGO / embassy / abroad match", "Free users, the moment such a job matches (employer hidden)");
+      await this.sendPhoto(chat, p.image, { text: p.caption, reply_markup: inline(p.buttons) });
+    }
+    const missed = missedDigest(
+      [
+        { title: job?.title ?? "Accountant", who: job?.company ?? "Example PLC" },
+        { title: premium?.title ?? "Program Officer", who: "NGO job" },
+        { title: "Sales Representative", who: "Example Trading" },
+      ],
+      7,
+      freeCap,
+      links,
+    )!;
+    await label(++n, "Missed yesterday", `Free users, every morning at ${settings.delivery.digestHourEat}:00, at most 10 jobs`);
+    await this.sendPhoto(chat, missed.image, { text: missed.caption, reply_markup: inline(missed.buttons) });
     if (premium) {
       const d = premiumPromo({ id: premium.id, title: premium.title, kind: employerLabel(premium.employerType) ?? (premium.isOverseas ? "Abroad" : null), location: locationText(premium), deadline: premium.deadline });
       await label(++n, "D · Premium match", "Marketing slot, free users, when a premium job matched (employer hidden)");
@@ -331,6 +385,8 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
         }
       }
       if (existing?.onboardedAt) {
+        // Set up in the Mini App before pressing Start: anything held back can go out now.
+        await this.messagesAllowed(user.id);
         await reply(ctx, M.welcomeBack(user.firstName, url(), user.alertsPaused));
       } else {
         await this.sendPhoto(ctx.chat.id, MOMENT_IMAGES.welcome, M.welcomeNew(user.firstName, url()));
@@ -424,6 +480,13 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       if (ctx.chat.type !== "private") return;
       const status = ctx.myChatMember.new_chat_member.status;
       await this.users.markBotBlocked(ctx.myChatMember.from.id, status === "kicked");
+    });
+
+    // They allowed messages from the Mini App (WebApp.requestWriteAccess): Telegram sends this service message.
+    // No reply; the Mini App carries on, and the backfill sends what was held back.
+    pm.on("message:write_access_allowed", async (ctx) => {
+      const user = await this.users.findByTelegramId(ctx.from.id);
+      if (user?.onboardedAt) await this.messagesAllowed(user.id);
     });
 
     pm.on("message", (ctx) => ctx.reply(M.FALLBACK_TEXT));

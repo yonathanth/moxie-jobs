@@ -19,6 +19,7 @@ export function checkPreferences(p: Preferences, taxonomy: TaxonomyIndex, limits
   };
   unknown("professionIds", p.professionIds, taxonomy.professionIds, "profession");
   unknown("functionIds", p.functionIds, taxonomy.functionIds, "job category");
+  unknown("excludedProfessionIds", p.excludedProfessionIds, taxonomy.professionIds, "profession");
   unknown("fieldOfStudyIds", p.fieldOfStudyIds, taxonomy.fieldOfStudyIds, "field of study");
   unknown("locationIds", p.locationIds, CITY_IDS, "city");
 

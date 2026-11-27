@@ -23,13 +23,13 @@ export const settingsSchema = z.object({
     .object({
       /** Don't alert on jobs first posted longer ago than this (e.g. catch-up backfill). */
       maxJobAgeHours: z.number().int().min(1).max(168).default(48),
-      /** Hour (Addis Ababa time) of the once-a-day "premium jobs matched" teaser for free users. */
-      teaserHourEat: z.number().int().min(0).max(23).default(18),
+      /** Hour (Addis Ababa time) of the morning "jobs you missed yesterday" message for free users. */
+      digestHourEat: z.number().int().min(0).max(23).default(8),
       /** Quiet hours (Addis Ababa time): alerts matched from quietFromEat until quietToEat wait until quietToEat. Equal = off. */
       quietFromEat: z.number().int().min(0).max(23).default(22),
       quietToEat: z.number().int().min(0).max(23).default(7),
     })
-    .default({ maxJobAgeHours: 48, teaserHourEat: 18, quietFromEat: 22, quietToEat: 7 }),
+    .default({ maxJobAgeHours: 48, digestHourEat: 8, quietFromEat: 22, quietToEat: 7 }),
   /** Marketing messages (pictures, worker `delivery/promo.ts`): one per user in each send slot (Addis Ababa "HH:MM"). */
   marketing: z
     .object({

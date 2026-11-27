@@ -15,7 +15,7 @@ import { formatDate } from "@/lib/plans";
  *
  * Free plan, by what's true for them:
  *   1. hit today's alert limit      → "4 more jobs are waiting"
- *   2. premium jobs matched (7 days) → "3 premium jobs matched you this week"
+ *   2. premium jobs matched (7 days) → "3 NGO, embassy or international jobs matched you this week"
  *   3. otherwise the general Pro pitch and the CV pitch take turns
  * Paid plan: only a renewal reminder, 3 days before it ends and on the last day.
  * Beta (everyone Pro): nothing.
@@ -55,7 +55,7 @@ export function pickNudge(me: MeDto, now: number): Nudge | null {
       quiet: false,
       reason: "renew",
       title: lastDay ? `Your ${PLAN_NAME[me.plan]} ends today` : `Your ${PLAN_NAME[me.plan]} ends on ${formatDate(me.planExpiresAt)}`,
-      body: "Renew now to keep every alert and premium job coming. The new time is added to what you have left.",
+      body: "Renew now to keep every alert and NGO, embassy and international job coming. The new time is added to what you have left.",
     };
   }
 
@@ -80,7 +80,7 @@ export function pickNudge(me: MeDto, now: number): Nudge | null {
         every: 3 * DAY,
         quiet: true,
         reason: "premium_job",
-        title: `${locked} premium ${locked === 1 ? "job" : "jobs"} matched you this week`,
+        title: `${locked} NGO, embassy or international ${locked === 1 ? "job" : "jobs"} matched you this week`,
         body: "NGO, UN, AU, embassy, international company and overseas jobs. Unlock them and get every new one instantly.",
         then: "/app/jobs?scope=for_you",
       };

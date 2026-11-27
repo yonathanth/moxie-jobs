@@ -16,12 +16,14 @@ import {
   type PublicJobDto,
 } from "@ethio/shared";
 
-/** Pure feed helpers: DTO mapping (with premium redaction), cursors, filter mapping. Unit-tested. */
+/** Pure feed helpers: DTO mapping (redacting locked jobs: kinds the plan lacks, or over today's limit), cursors, filter mapping. Unit-tested. */
 
 export interface CardContext {
   /** The user's plan includes premium jobs. */
   premiumJobs: boolean;
   match: JobCardDto["match"];
+  /** Matched over today's free alert limit: locked until tomorrow. */
+  heldToday?: boolean;
   /** The user bookmarked it. */
   saved?: boolean;
   fieldNames: ReadonlyMap<string, string>;
@@ -30,11 +32,13 @@ export interface CardContext {
 
 export function toCard(job: Job, ctx: CardContext): JobCardDto {
   const premium = isPremiumJob(job);
-  const locked = premium && !ctx.premiumJobs;
+  const lockReason: JobCardDto["lockReason"] = premium && !ctx.premiumJobs ? "premium" : ctx.heldToday ? "daily_limit" : null;
+  const locked = lockReason !== null;
   const base = {
     id: job.id,
     title: job.title,
     locked,
+    lockReason,
     premium,
     match: ctx.match,
     saved: ctx.saved ?? false,

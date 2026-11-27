@@ -25,6 +25,7 @@ export class PreferencesService {
     return {
       professionIds: professions.map((p) => p.professionId),
       functionIds: functions.map((f) => f.functionId),
+      excludedProfessionIds: prefs.excludedProfessionIds,
       fieldOfStudyIds: prefs.fieldOfStudyIds,
       educationLevel: prefs.educationLevel as Preferences["educationLevel"],
       experienceBand: prefs.experienceBand as Preferences["experienceBand"],
@@ -51,6 +52,8 @@ export class PreferencesService {
     if (issues.length) throw new UnprocessableEntityException({ message: "Invalid preferences", issues });
 
     const data = {
+      // Exclusions only mean something inside a followed category; with none followed they're dropped.
+      excludedProfessionIds: input.functionIds.length ? input.excludedProfessionIds : [],
       fieldOfStudyIds: input.fieldOfStudyIds,
       educationLevel: input.educationLevel,
       experienceBand: input.experienceBand,

@@ -65,6 +65,14 @@ describe("matchJob: target", () => {
     });
   });
 
+  it("skips roles left out of a followed category, even when the degree matches", () => {
+    const u = user({ professionIds: [], functionIds: ["accounting_finance"], excludedProfessionIds: ["auditor"], fieldOfStudyIds: ["accounting"] });
+    expect(run(job({ professionId: "auditor" }), u)).toEqual({ ok: false, reason: "excluded" });
+    expect(run(job({ professionId: "accountant" }), u)).toEqual({ ok: true, via: "function" });
+    // A job with no specific role still matches the category.
+    expect(run(job({ professionId: null }), u)).toEqual({ ok: true, via: "function" });
+  });
+
   it("ignores 'any field' as a degree match", () => {
     expect(run(job({ professionId: null, fieldOfStudyIds: ["any_field"] }), user({ professionIds: [], fieldOfStudyIds: ["accounting"] })).ok).toBe(false);
   });

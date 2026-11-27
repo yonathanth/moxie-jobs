@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CheckCircle2, Clock, Eye, Lock, Palette, PencilLine, Send, Target, Trash2, Undo2, XCircle } from "lucide-react";
+import { Briefcase, Check, CheckCircle2, Clock, Download, Save, Eye, Lock, MessageCircle, Palette, PencilLine, Target, Trash2, Undo2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,9 +12,10 @@ import { useCv, useCvPreview, useCvTemplates, useDeleteCv, usePackCheckout, useP
 import { ScoreChip, ScoreSheet } from "@/components/cv/ScorePanel";
 import { useBackButton, usePayment, usePricing } from "@/components/miniapp/hooks";
 import { CvPageSkeleton, PaperSkeleton, TemplatesSkeleton } from "@/components/skeletons";
-import { Badge, Button, CenteredMessage, cx, ErrorText, IconTile, Sheet, Skeleton, Spinner, StickyFooter } from "@/components/ui";
+import { Badge, Button, CenteredMessage, cx, Dialog, ErrorText, IconTile, Sheet, Skeleton, Spinner, StickyFooter } from "@/components/ui";
+import { BOT_URL } from "@/lib/config";
 import { scoreContent, type PolishTarget } from "@/lib/cv-score";
-import { getWebApp, haptic } from "@/lib/telegram";
+import { getWebApp, haptic, openExternal } from "@/lib/telegram";
 
 function openCheckout(url: string) {
   const wa = getWebApp();
@@ -125,6 +126,11 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
   if (payment) return <UnlockWaiting cv={doc} payment={payment} onDone={() => setPayment(null)} />;
 
   const saving = update.isPending || pendingSave;
+  // Save now (also what the Saved chip does while changes are waiting to autosave, or after a failed save).
+  const saveNow = () => {
+    setPendingSave(false);
+    update.mutate({ content: draft }, { onSuccess: () => haptic.success(), onError: () => haptic.error() });
+  };
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-lg px-4 pb-44 pt-5 animate-fade-up">
@@ -172,6 +178,7 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
             </button>
           ))}
         </div>
+        <SaveChip state={update.isPending ? "saving" : update.isError ? "error" : pendingSave ? "unsaved" : "saved"} onSave={saveNow} />
         <ScoreChip score={score} onOpen={() => setSheet("score")} />
       </div>
 
@@ -224,7 +231,7 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
               <span className="text-danger">Not saved: {update.error.message}</span>
             ) : (
               <>
-                <Check className="size-3.5 text-emerald" /> All changes saved
+                <Check className="size-3.5 text-emerald" /> All changes saved. Your CV saves automatically as you type.
               </>
             )}
           </p>
@@ -256,72 +263,136 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
   );
 }
 
-/* ---------- send / unlock ---------- */
+/** Save state in the top bar: Saved (with a tick), Saving…, or a Save button while changes wait or after a failed save. */
+function SaveChip({ state, onSave }: { state: "saved" | "saving" | "unsaved" | "error"; onSave: () => void }) {
+  if (state === "saving") {
+    return (
+      <span className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-separator bg-surface px-3 text-[13px] font-semibold text-hint" aria-live="polite">
+        <Spinner size="xs" />
+        Saving
+      </span>
+    );
+  }
+  if (state === "saved") {
+    return (
+      <span className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[13px] font-semibold text-emerald-800" aria-live="polite">
+        <Check className="size-4" />
+        Saved
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onSave}
+      className={cx(
+        "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold",
+        state === "error" ? "border border-red-200 bg-red-50 text-danger" : "bg-ink text-white",
+      )}
+    >
+      <Save className="size-4" />
+      {state === "error" ? "Retry save" : "Save"}
+    </button>
+  );
+}
 
+/* ---------- download / unlock ---------- */
+
+/**
+ * One button: Download. The PDF arrives in the chat with the bot (a Mini App can't save files),
+ * so a success dialog says so and offers where to go next. A locked CV (plan allowance used up) is
+ * downloaded by unlocking it: with a CV credit if they have one, otherwise after buying a CV pack.
+ */
 function Actions({ cv, onCheckout, flushing }: { cv: CvDetailDto; onCheckout: (p: { id: string; url: string }) => void; flushing: boolean }) {
   const send = useSendCv(cv.id);
   const unlock = useUnlockCv(cv.id);
-  const [sent, setSent] = useState(false);
+  const [done, setDone] = useState(false);
   const [packs, setPacks] = useState(false);
 
-  const doSend = () =>
+  const download = () => {
+    if (cv.locked) {
+      if (cv.unlockCredits <= 0) return setPacks(true);
+      // Unlocking sends the clean PDF to the chat.
+      return unlock.mutate(undefined, {
+        onSuccess: () => {
+          haptic.success();
+          setDone(true);
+        },
+        onError: () => haptic.error(),
+      });
+    }
     send.mutate(undefined, {
       onSuccess: (r) => {
         if (r.sent) {
           haptic.success();
-          setSent(true);
+          setDone(true);
         } else haptic.error();
       },
       onError: () => haptic.error(),
     });
+  };
 
   const error =
-    send.error?.message ?? unlock.error?.message ?? (send.data && !send.data.sent ? "Couldn't send it. Open the bot chat, press Start, then try again." : null);
+    send.error?.message ??
+    unlock.error?.message ??
+    (send.data && !send.data.sent ? "We couldn't send it to your chat. Open the bot chat, press Start, then try again." : null);
 
   return (
     <>
       <StickyFooter>
         {error && <ErrorText>{error}</ErrorText>}
-        {sent && !error && <p className="text-center text-[13px] font-medium text-emerald">Sent. Check your chat with the bot.</p>}
-        {unlock.isSuccess && !error && <p className="text-center text-[13px] font-medium text-emerald">Unlocked. The clean PDF is in your chat.</p>}
-        {cv.locked ? (
-          <>
-            <div className="flex gap-2">
-              <Button variant="secondary" className="w-auto flex-1" loading={send.isPending} disabled={flushing} onClick={doSend}>
-                Preview PDF
-              </Button>
-              {cv.unlockCredits > 0 ? (
-                <Button
-                  variant="accent"
-                  className="w-auto flex-[2]"
-                  loading={unlock.isPending}
-                  onClick={() => unlock.mutate(undefined, { onSuccess: () => haptic.success(), onError: () => haptic.error() })}
-                >
-                  <Lock className="size-4" />
-                  Unlock · 1 credit
-                </Button>
-              ) : (
-                <Button variant="accent" className="w-auto flex-[2]" onClick={() => setPacks(true)}>
-                  <Lock className="size-4" />
-                  Unlock with a CV pack
-                </Button>
-              )}
-            </div>
-            <p className="text-center text-[11px] text-hint">
-              {cv.unlockCredits > 0
-                ? `You have ${cv.unlockCredits} ${cv.kind === "tailored" ? "tailored" : "new"} CV ${cv.unlockCredits === 1 ? "credit" : "credits"} left.`
-                : "The preview PDF is watermarked. Unlocking sends you the clean one."}
-            </p>
-          </>
-        ) : (
-          <Button variant="accent" loading={send.isPending} disabled={flushing} onClick={doSend}>
-            <Send className="size-4" />
-            Send PDF to my chat
-          </Button>
+        <Button variant="accent" loading={send.isPending || unlock.isPending} disabled={flushing} onClick={download}>
+          <Download className="size-4" />
+          Download
+        </Button>
+        {cv.locked && (
+          <p className="text-center text-[11px] text-hint">
+            {cv.unlockCredits > 0
+              ? `Uses 1 of your ${cv.unlockCredits} ${cv.kind === "tailored" ? "tailored" : "new"} CV ${cv.unlockCredits === 1 ? "credit" : "credits"}.`
+              : "You've used the CVs in your plan. Get a CV pack to download this one."}
+          </p>
         )}
       </StickyFooter>
       {packs && <PackSheet cvId={cv.id} onClose={() => setPacks(false)} onCheckout={onCheckout} />}
+      {done && <DownloadedDialog cv={cv} onClose={() => setDone(false)} />}
     </>
+  );
+}
+
+/** After a download: the PDF is in the chat. Next: open the chat, or go use the CV. */
+function DownloadedDialog({ cv, onClose }: { cv: Pick<CvDetailDto, "jobId" | "kind">; onClose: () => void }) {
+  const router = useRouter();
+  const next =
+    cv.kind === "tailored" && cv.jobId ? { label: "Back to the job", href: `/app/jobs/${cv.jobId}` } : { label: "Find jobs to apply to", href: "/app/jobs" };
+  return (
+    <Dialog
+      labelId="cv-downloaded-title"
+      onClose={onClose}
+      icon={
+        <IconTile tone="emerald">
+          <CheckCircle2 className="size-5" />
+        </IconTile>
+      }
+      title="Your CV is downloaded"
+      body="We sent the PDF to your chat with the bot. Open it there to save it or send it to employers."
+    >
+      <Button
+        onClick={() => {
+          openExternal(BOT_URL);
+          onClose();
+        }}
+      >
+        <MessageCircle className="size-4" />
+        Open the chat
+      </Button>
+      <Button variant="secondary" onClick={() => router.push(next.href)}>
+        <Briefcase className="size-4" />
+        {next.label}
+      </Button>
+      <Button variant="ghost" onClick={onClose}>
+        Keep editing
+      </Button>
+    </Dialog>
   );
 }
 
@@ -330,8 +401,8 @@ function PackSheet({ cvId, onClose, onCheckout }: { cvId: string; onClose: () =>
   const pricing = usePricing();
   const checkout = usePackCheckout();
   return (
-    <Sheet title="Unlock with a CV pack" onClose={onClose}>
-      <p className="mb-5 text-[13px] text-hint">One credit unlocks this CV and the clean PDF goes to your chat. The rest are yours for later.</p>
+    <Sheet title="Get a CV pack to download" onClose={onClose}>
+      <p className="mb-5 text-[13px] text-hint">One credit unlocks this CV and we send the PDF to your chat. The rest are yours for later.</p>
       {pricing.data ? (
         <PackCards
           packs={pricing.data.packs}
@@ -376,21 +447,7 @@ function UnlockWaiting({ cv, payment, onDone }: { cv: CvDetailDto; payment: { id
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  if (state === "paid") {
-    return (
-      <CenteredMessage
-        icon={
-          <IconTile tone="emerald">
-            <CheckCircle2 className="size-5" />
-          </IconTile>
-        }
-        title="Your CV is unlocked"
-        body="We sent the clean PDF to your chat with the bot."
-      >
-        <Button onClick={onDone}>Back to my CV</Button>
-      </CenteredMessage>
-    );
-  }
+  if (state === "paid") return <DownloadedDialog cv={cv} onClose={onDone} />;
   if (state === "failed" || state === "cancelled") {
     return (
       <CenteredMessage
@@ -410,7 +467,7 @@ function UnlockWaiting({ cv, payment, onDone }: { cv: CvDetailDto; payment: { id
         </IconTile>
       }
       title="Finish paying in SantimPay"
-      body="Complete the payment on the page that opened, then come back. We'll send the clean PDF as soon as it's confirmed."
+      body="Complete the payment on the page that opened, then come back. We'll send your CV to the chat as soon as it's confirmed."
     >
       <div className="flex flex-col gap-2">
         <div className="mb-2 flex items-center justify-center gap-2 text-sm text-hint">

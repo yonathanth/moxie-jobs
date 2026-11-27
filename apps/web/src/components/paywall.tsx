@@ -92,13 +92,13 @@ const COPY: Record<PaywallReason, { icon: LucideIcon; title: string; body: (cur:
   },
   premium_job: {
     icon: Building2,
-    title: "Unlock premium jobs",
+    title: "Unlock NGO, embassy & international jobs",
     body: () => "NGO, UN, AU, embassy, international company and overseas jobs, sent the moment they're posted.",
   },
   daily_cap: {
     icon: InfinityIcon,
     title: "Go unlimited",
-    body: (cur) => `The free plan sends ${cur.dailyJobCap ?? 10} alerts a day. Pro and Career send every match instantly, with no limit.`,
+    body: (cur) => `The free plan sends ${cur.dailyJobCap ?? 5} jobs a day in full. Jobs over the limit open free the next day; Pro and Career send every match instantly, with no limit.`,
   },
   cv_ai: {
     icon: FileText,

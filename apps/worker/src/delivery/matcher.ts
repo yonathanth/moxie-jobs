@@ -33,6 +33,7 @@ function toCandidate(user: UserWithPrefs): MatchCandidate {
   return {
     professionIds: user.professions.map((x) => x.professionId),
     functionIds: user.functions.map((x) => x.functionId),
+    excludedProfessionIds: p.excludedProfessionIds,
     fieldOfStudyIds: p.fieldOfStudyIds,
     educationLevel: p.educationLevel,
     experienceBand: p.experienceBand,
@@ -47,9 +48,9 @@ function toCandidate(user: UserWithPrefs): MatchCandidate {
 
 
 /**
- * How a matched job reaches a user: sent now, or "locked" when it's a premium
- * job (NGO, UN/AU/embassy, foreign company, overseas) their plan doesn't
- * include. Locked rows feed the once-a-day teaser and unlock on upgrade.
+ * How a matched job reaches a user: a card, or (mode "locked") a picture preview when it's a kind of
+ * job (NGO, UN/AU/embassy, foreign company, overseas) their plan doesn't include. Locked/teased rows show
+ * locked in the feed, go in the morning missed-jobs message, and unlock on upgrade.
  */
 export function deliveryState(job: { employerType: string | null; isOverseas: boolean }, limits: PlanLimits) {
   return isPremiumJob(job) && !limits.premiumJobs
@@ -61,6 +62,8 @@ export function deliveryState(job: { employerType: string | null; isOverseas: bo
 export const BACKFILL_DAYS = 7;
 /** Cards sent per backfill (there's no in-app feed yet to hold the rest). */
 export const BACKFILL_MAX_CARDS = 10;
+/** Picture previews of locked kinds of jobs (NGO, embassy, abroad) sent with a backfill; the rest wait in the feed. */
+export const BACKFILL_MAX_PREVIEWS = 3;
 
 /**
  * Queues already-known open jobs for one user, after they onboard, change
@@ -104,8 +107,9 @@ export async function backfillUser(userId: string, now = new Date()): Promise<nu
   const { ids: taxonomy } = await loadTaxonomy();
   const isOpenFor = (jobId: string) => {
     const d = existing.get(jobId);
-    // Locked/teased rows are fair game again once the plan includes premium jobs.
-    return !d || (limits.premiumJobs && (d.status === "locked" || d.status === "teased"));
+    // Failed rows (e.g. the bot couldn't message them yet) are retried; locked/teased rows are fair game
+    // again once the plan includes premium jobs.
+    return !d || d.status === "failed" || (limits.premiumJobs && (d.status === "locked" || d.status === "teased"));
   };
   const excludeUnpaid = settings.unpaidJobs === "exclude";
   const matched = jobs.filter(
@@ -130,10 +134,11 @@ export async function backfillUser(userId: string, now = new Date()): Promise<nu
   }
   const rows = [
     ...fresh.map((job) => ({ userId, jobId: job.id, status: "pending", mode: "backfill", scheduledFor: now })),
-    ...locked.map((job) => ({ userId, jobId: job.id, status: "locked", mode: "locked", scheduledFor: now })),
+    // The first few are sent as picture previews (pending + mode locked → the sender sends a preview, then "teased").
+    ...locked.map((job, i) => ({ userId, jobId: job.id, status: i < BACKFILL_MAX_PREVIEWS ? "pending" : "locked", mode: "locked", scheduledFor: now })),
   ];
   const { count } = rows.length ? await prisma.delivery.createMany({ data: rows, skipDuplicates: true }) : { count: 0 };
-  const queued = unlock.length + fresh.length;
+  const queued = unlock.length + fresh.length + Math.min(locked.length, BACKFILL_MAX_PREVIEWS);
   if (queued || locked.length) {
     log.info({ user: userId, scanned: jobs.length, matched: matched.length, queued, unlocked: unlock.length, locked: locked.length, inserted: count }, "backfill queued");
   }
@@ -176,13 +181,15 @@ export async function matchAndQueue(job: Job, now = new Date()): Promise<number>
   for (const user of candidates) {
     const limits = resolveLimits(effectivePlan(user, settings, now), settings);
     if (!matchJob(job, toCandidate(user), limits, taxonomy.professionToFunction).ok) continue;
-    rows.push({ userId: user.id, jobId: job.id, ...deliveryState(job, limits), scheduledFor: sendAt });
+    // Kinds of jobs the plan doesn't include go out as a picture preview the moment they match (mode "locked").
+    const state = deliveryState(job, limits);
+    rows.push({ userId: user.id, jobId: job.id, status: "pending", mode: state.mode, scheduledFor: sendAt });
   }
 
   if (!rows.length) return 0;
   // (userId, jobId) is unique: a job never reaches the same user twice.
   const { count } = await prisma.delivery.createMany({ data: rows, skipDuplicates: true });
-  const toSend = rows.filter((r) => r.status === "pending").length;
-  log.info({ job: job.id, title: job.title, candidates: candidates.length, inserted: count, toSend, locked: rows.length - toSend }, "job matched");
+  const toSend = rows.length;
+  log.info({ job: job.id, title: job.title, candidates: candidates.length, inserted: count, toSend, previews: rows.filter((r) => r.mode === "locked").length }, "job matched");
   return toSend;
 }

@@ -1,16 +1,37 @@
 import { prisma } from "../db";
 import { env } from "../env";
 import { log } from "../log";
-import { BotBlockedError, sendMessage } from "./bot-api";
+import type { Job } from "@ethio/db";
+import { BotBlockedError, ChatNotFoundError, sendMessage, sendPhoto } from "./bot-api";
 import { buildCard } from "./card";
 import { loadSettings } from "./matcher";
 import { loadTaxonomy } from "../pipeline/taxonomy";
-import { effectivePlan, resolveLimits } from "@ethio/shared";
+import { effectivePlan, employerLabel, kindMatchPreview, locationText, overLimitPreview, resolveLimits, type PreviewJob, type PreviewLinks } from "@ethio/shared";
 import { startOfDayEat } from "./schedule";
 
 const TICK_MS = 5_000;
 const CLAIM_LIMIT = 100;
 const PER_CHAT_GAP_MS = 400;
+
+/** Where previews link: Mini App buttons need https; links in the text need the bot's username. */
+export function previewLinks(): PreviewLinks {
+  const e = env();
+  return {
+    app: e.WEB_APP_URL.startsWith("https://") ? e.WEB_APP_URL : null,
+    bot: e.TELEGRAM_BOT_USERNAME ? `https://t.me/${e.TELEGRAM_BOT_USERNAME}` : null,
+  };
+}
+
+/** What a preview may show: never the employer's name or how to apply. */
+export function previewJob(job: Job): PreviewJob {
+  return {
+    id: job.id,
+    title: job.title,
+    employerLabel: employerLabel(job.employerType) ?? (job.isOverseas ? "Abroad" : null),
+    location: locationText(job),
+    deadline: job.deadline,
+  };
+}
 
 interface Claimed {
   id: string;
@@ -21,7 +42,8 @@ interface Claimed {
 
 /**
  * Sends due Deliveries, one card each, right away. Plans with a daily cap
- * (free) get at most N per Addis Ababa day; the rest are skipped as daily_cap.
+ * (free) get at most N full cards per Addis Ababa day; the rest get a short preview
+ * (skipped/daily_cap, opens in the app tomorrow). Locked kinds of jobs get a picture preview (teased).
  * Rows are claimed with SKIP LOCKED so a restart never double-sends.
  */
 export class Sender {
@@ -125,20 +147,31 @@ export class Sender {
         const db = jb.deadline?.getTime() ?? Infinity;
         return da - db || jb.firstSeenAt.getTime() - ja.firstSeenAt.getTime();
       });
-      const catchUp = ordered.filter((d) => d.mode === "backfill");
-      const alerts = ordered.filter((d) => d.mode !== "backfill");
+      // Kinds of jobs the plan doesn't include (NGO, UN/AU/embassy, international company, abroad): a picture
+      // preview. If they upgraded since it was queued, it goes out as a normal card instead.
+      const previews = ordered.filter((d) => d.mode === "locked" && !limits.premiumJobs);
+      const rest = ordered.filter((d) => !previews.includes(d));
+      const catchUp = rest.filter((d) => d.mode === "backfill");
+      const alerts = rest.filter((d) => d.mode !== "backfill");
       const allowed = alerts.slice(0, Number.isFinite(budget) ? budget : alerts.length);
       const cards = [...catchUp, ...allowed];
+      // Over the daily limit: a short preview (no employer, no how to apply); the job opens in the app tomorrow.
       const over = alerts.slice(allowed.length);
-      if (over.length) await this.finish(over.map((d) => d.id), "skipped", "daily_cap");
 
       try {
         for (const d of cards) await this.sendCard(user.telegramId, d, jobsById.get(d.jobId)!, sources, fieldNames);
+        for (const d of previews) await this.sendKindPreview(user.telegramId, d, jobsById.get(d.jobId)!);
+        for (const d of over) await this.sendOverLimitPreview(user.telegramId, d, jobsById.get(d.jobId)!, limits.dailyJobCap ?? 5);
       } catch (err) {
         if (err instanceof BotBlockedError) {
           await prisma.user.update({ where: { id: userId }, data: { botBlockedAt: new Date() } });
           await prisma.delivery.updateMany({ where: { userId, status: { in: ["sending", "pending"] } }, data: { status: "skipped", error: "bot_blocked" } });
           log.info({ user: userId }, "user blocked the bot; deliveries skipped");
+        } else if (err instanceof ChatNotFoundError) {
+          // Can't message them until they allow it in the Mini App (or press Start); kept as matches, and re-sent
+          // by the backfill once they do (the API touches their preferences then).
+          await prisma.delivery.updateMany({ where: { userId, status: { in: ["sending", "pending"] } }, data: { status: "failed", error: "chat_not_found" } });
+          log.info({ user: userId }, "bot can't message this user yet (chat not found); deliveries held");
         } else {
           const ids = deliveries.map((d) => d.id);
           await prisma.delivery.updateMany({ where: { id: { in: ids }, status: "sending" }, data: { status: "failed", error: String(err).slice(0, 500) } });
@@ -164,6 +197,25 @@ export class Sender {
     });
     const messageId = await sendMessage(chatId, card.text, { buttons: card.buttons });
     await prisma.delivery.update({ where: { id: delivery.id }, data: { status: "sent", sentAt: new Date(), tgMessageId: BigInt(messageId) } });
+    await new Promise((r) => setTimeout(r, PER_CHAT_GAP_MS));
+  }
+
+  /** A locked kind of job: picture preview with See job / Get Pro. Stays locked in the feed ("teased"). */
+  private async sendKindPreview(chatId: bigint, delivery: Claimed, job: Job) {
+    const msg = kindMatchPreview({ ...previewJob(job), employerType: job.employerType, isOverseas: job.isOverseas }, previewLinks());
+    const messageId = await sendPhoto(chatId, msg.image, msg.caption, { buttons: msg.buttons });
+    await prisma.delivery.update({ where: { id: delivery.id }, data: { status: "teased", sentAt: new Date(), tgMessageId: BigInt(messageId) } });
+    await new Promise((r) => setTimeout(r, PER_CHAT_GAP_MS));
+  }
+
+  /** Over today's free limit: a text preview. Recorded as skipped/daily_cap (the feed's "opens tomorrow"), with the message id. */
+  private async sendOverLimitPreview(chatId: bigint, delivery: Claimed, job: Job, dailyCap: number) {
+    const msg = overLimitPreview(previewJob(job), dailyCap, previewLinks());
+    const messageId = await sendMessage(chatId, msg.text, { buttons: msg.buttons });
+    await prisma.delivery.update({
+      where: { id: delivery.id },
+      data: { status: "skipped", error: "daily_cap", sentAt: new Date(), tgMessageId: BigInt(messageId) },
+    });
     await new Promise((r) => setTimeout(r, PER_CHAT_GAP_MS));
   }
 

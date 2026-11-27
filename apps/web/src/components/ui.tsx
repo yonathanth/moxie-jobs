@@ -290,6 +290,39 @@ export function ErrorText({ children }: { children: ReactNode }) {
   return <p className="text-sm text-danger">{children}</p>;
 }
 
+/** A centered modal: icon, title, body and actions (success moments, required steps). No close button unless `onClose` is given. */
+export function Dialog({
+  icon,
+  title,
+  body,
+  children,
+  onClose,
+  labelId = "dialog-title",
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  body?: ReactNode;
+  children?: ReactNode;
+  onClose?: () => void;
+  labelId?: string;
+}) {
+  return (
+    <Portal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-6" role="dialog" aria-modal="true" aria-labelledby={labelId}>
+        <button type="button" tabIndex={-1} aria-label={onClose ? "Close" : undefined} onClick={onClose} disabled={!onClose} className="absolute inset-0 cursor-default bg-black/40 animate-[fade-in_0.2s_ease-out]" />
+        <div className="relative w-full max-w-sm rounded-3xl bg-surface p-6 text-center shadow-[0_20px_60px_-20px_rgba(15,17,21,0.4)] animate-[sheet-up_0.24s_ease-out]">
+          {icon && <div className="flex justify-center">{icon}</div>}
+          <h2 id={labelId} className={cx("text-[22px] font-bold leading-tight tracking-tight", icon && "mt-4")}>
+            {title}
+          </h2>
+          {body && <div className="mt-2 text-[15px] text-hint">{body}</div>}
+          {children && <div className="mt-6 flex flex-col gap-2">{children}</div>}
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
 /** A bottom sheet over the page (score details, template picker, user details). */
 export function Sheet({ title, onClose, children, footer }: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   return (

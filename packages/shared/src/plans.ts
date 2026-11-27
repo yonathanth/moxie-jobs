@@ -23,7 +23,7 @@ export interface PlanLimits {
 export const DEFAULT_PLAN_LIMITS: Record<Plan, PlanLimits> = {
   // Following jobs is generous on every plan (jobs are scarce; narrow matching means few alerts).
   // Plans differ on alerts per day, premium jobs and CVs.
-  free: { maxProfessions: 10, maxFunctions: 3, maxFieldsOfStudy: 3, maxLocations: 3, dailyJobCap: 10, premiumJobs: false, cvNewPerMonth: 0, cvTailorPerMonth: 0 },
+  free: { maxProfessions: 10, maxFunctions: 3, maxFieldsOfStudy: 3, maxLocations: 3, dailyJobCap: 5, premiumJobs: false, cvNewPerMonth: 0, cvTailorPerMonth: 0 },
   pro: { maxProfessions: 25, maxFunctions: 6, maxFieldsOfStudy: 5, maxLocations: 10, dailyJobCap: null, premiumJobs: true, cvNewPerMonth: 2, cvTailorPerMonth: 10 },
   career: { maxProfessions: 40, maxFunctions: 12, maxFieldsOfStudy: 10, maxLocations: 20, dailyJobCap: null, premiumJobs: true, cvNewPerMonth: 5, cvTailorPerMonth: null },
 };

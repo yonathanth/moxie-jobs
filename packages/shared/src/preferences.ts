@@ -18,6 +18,8 @@ export const preferencesInputSchema = z
   .object({
     professionIds: uniqueIds(MAX_LIMITS.maxProfessions).default([]),
     functionIds: uniqueIds(MAX_LIMITS.maxFunctions).default([]),
+    /** Roles left out of a followed whole category (only meaningful inside functionIds). */
+    excludedProfessionIds: uniqueIds(200).default([]),
     fieldOfStudyIds: uniqueIds(MAX_LIMITS.maxFieldsOfStudy).default([]),
     educationLevel: z.enum(EDUCATION_LEVEL_IDS).nullable().default(null),
     experienceBand: z.enum(EXPERIENCE_BAND_IDS).nullable().default(null),

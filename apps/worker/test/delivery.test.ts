@@ -3,7 +3,6 @@ import { buildCard, type CardJob } from "../src/delivery/card";
 import { DEFAULT_PLAN_LIMITS } from "@ethio/shared";
 import { deliveryState } from "../src/delivery/matcher";
 import { sendTimeAfterQuiet, startOfDayEat, todayAtEat } from "../src/delivery/schedule";
-import { digestText } from "../src/delivery/teaser";
 import { nudgeText } from "../src/delivery/nudge";
 
 // EAT = UTC+3
@@ -48,36 +47,6 @@ describe("deliveryState", () => {
     expect(deliveryState(local, DEFAULT_PLAN_LIMITS.free)).toEqual({ status: "pending", mode: "instant" });
     expect(deliveryState(ngo, DEFAULT_PLAN_LIMITS.pro).status).toBe("pending");
     expect(deliveryState({ employerType: null, isOverseas: false }, DEFAULT_PLAN_LIMITS.free).status).toBe("pending");
-  });
-});
-
-const PRO = { premiumJobs: true, dailyJobCap: null };
-
-describe("digestText", () => {
-  it("describes Pro from its live limits", () => {
-    const one = { waiting: 1, dailyCap: 10, ngo: 0, intl: 0, foreign: 0, overseas: 0 };
-    expect(digestText(one, PRO)).toContain("Pro sends every match the moment it's posted, with no daily limit, including NGO, international and overseas jobs.");
-    expect(digestText(one, { premiumJobs: false, dailyJobCap: 50 })).toContain("Pro sends every match the moment it's posted, up to 50 a day.");
-  });
-
-  const none = { waiting: 0, dailyCap: 10, ngo: 0, intl: 0, foreign: 0, overseas: 0 };
-  it("says nothing when nothing was held back", () => {
-    expect(digestText(none, PRO)).toBeNull();
-  });
-  it("reports matches over the daily limit", () => {
-    const text = digestText({ ...none, waiting: 4 }, PRO)!;
-    expect(text).toContain("You've had your 10 free alerts today. <b>4 more matches are waiting</b> in your feed.");
-    expect(text).not.toContain("premium");
-  });
-  it("reports premium matches by kind, with plurals", () => {
-    const text = digestText({ ...none, ngo: 3, intl: 1, overseas: 2 }, PRO)!;
-    expect(text).toContain("<b>6 premium jobs</b> also matched you: 3 NGO jobs, 1 UN, AU or embassy job, 2 jobs abroad.");
-    expect(text).not.toContain("waiting");
-  });
-  it("combines both in one message", () => {
-    const text = digestText({ ...none, waiting: 1, ngo: 1 }, PRO)!;
-    expect(text).toContain("<b>1 more match is waiting</b>");
-    expect(text).toContain("<b>1 premium job</b> also matched you: 1 NGO job.");
   });
 });
 
