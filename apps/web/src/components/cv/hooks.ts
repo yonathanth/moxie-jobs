@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CvContent, CvGenerateRequest, CvPolishTarget, PackCheckoutRequest } from "@ethio/shared";
+import type { CvContent, CvDetailDto, CvGenerateRequest, CvPolishTarget, PackCheckoutRequest } from "@ethio/shared";
 import { api, uploadCvFile } from "@/lib/api";
 import { useSession } from "../miniapp/session";
 
@@ -96,12 +96,21 @@ export function useUnlockCv(id: string) {
   });
 }
 
+/** Pack-paid CVs: count one AI run down in the cached CV (no refetch, so the editor's draft is untouched). */
+function useSpendAi(id: string) {
+  const qc = useQueryClient();
+  return (kind: "polish" | "review") =>
+    qc.setQueryData<CvDetailDto>(["cv", id], (cv) => (cv?.aiLeft ? { ...cv, aiLeft: { ...cv.aiLeft, [kind]: Math.max(0, cv.aiLeft[kind] - 1) } } : cv));
+}
+
 export function usePolishCv(id: string) {
   const { token } = useSession();
-  return useMutation({ mutationFn: (body: { content?: CvContent; targets: CvPolishTarget[] | "all" }) => api.cv.polish(token, id, body) });
+  const spend = useSpendAi(id);
+  return useMutation({ mutationFn: (body: { content?: CvContent; targets: CvPolishTarget[] | "all" }) => api.cv.polish(token, id, body), onSuccess: () => spend("polish") });
 }
 
 export function useReviewCv(id: string) {
   const { token } = useSession();
-  return useMutation({ mutationFn: (content?: CvContent) => api.cv.review(token, id, content) });
+  const spend = useSpendAi(id);
+  return useMutation({ mutationFn: (content?: CvContent) => api.cv.review(token, id, content), onSuccess: () => spend("review") });
 }

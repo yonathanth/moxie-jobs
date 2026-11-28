@@ -138,10 +138,14 @@ function factLine(job: PreviewJob): string | null {
   return parts.length ? esc(parts.join(" · ")) : null;
 }
 
-/** "New match: <title>", blank, the sentence, blank, place · deadline · salary, blank, then the ending. */
-function body(job: PreviewJob, ending: string[]): string {
+/**
+ * The headline, blank, the sentence, blank, place · deadline · salary, blank, then the ending.
+ * Headline: "<b>New match: <title></b>", or for the kinds only subscribers get, "<b>An NGO</b> is hiring: <title>".
+ */
+function body(job: PreviewJob, ending: string[], byHirer = false): string {
   const fact = factLine(job);
-  return [`<b>New match: ${esc(job.title)}</b>`, "", esc(cut(previewSentence(job), 400)), ...(fact ? ["", fact] : []), "", ...ending].join("\n");
+  const head = byHirer ? `<b>${esc(job.hirer)}</b> is hiring: ${esc(job.title)}` : `<b>New match: ${esc(job.title)}</b>`;
+  return [head, "", esc(cut(previewSentence(job), 400)), ...(fact ? ["", fact] : []), "", ...ending].join("\n");
 }
 
 const proLine = (l: PreviewLinks) => `<b>${link(startApp(l, "plans"), "Subscribe")}</b> to see who's hiring and apply.`;
@@ -161,7 +165,7 @@ export function kindMatchPreview(
   l: PreviewLinks,
 ): { image: string; caption: string; buttons: InlineButton[][] } {
   const kind = kindOf(job);
-  const caption = body(job, [`${kind ? KIND_JOBS[kind] : "These jobs"} are for subscribers.`, proLine(l)]);
+  const caption = body(job, [`${kind ? KIND_JOBS[kind] : "These jobs"} are for subscribers.`, proLine(l)], true);
   return { image: `/og/msg/premium?job=${job.id}`, caption, buttons: proButton(l) };
 }
 

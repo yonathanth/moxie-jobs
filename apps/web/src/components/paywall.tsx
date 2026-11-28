@@ -103,7 +103,7 @@ const COPY: Record<PaywallReason, { icon: LucideIcon; title: string; body: (cur:
   cv_ai: {
     icon: FileText,
     title: "Get every CV fix",
-    body: () => "See the full breakdown, get an AI check and let AI polish your CV in one tap. Plus new and tailored CVs every month.",
+    body: () => "See the full breakdown, get an AI check and let AI polish your CV in one tap. Pro and Career include it on every CV, plus new and tailored CVs every month. CVs made with a CV pack include it too.",
   },
   renew: {
     icon: Clock,

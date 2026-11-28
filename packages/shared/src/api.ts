@@ -388,8 +388,10 @@ export interface CvDetailDto extends CvSummaryDto {
   questions: { id: string; question: string; reason?: string }[];
   /** Tailored CVs: what the job asks for (drives the score's job match). */
   jobRequirements: CvJobRequirements | null;
-  /** AI polish and AI check are included in the person's plan. */
+  /** AI polish and AI check are available on this CV (a paid plan, or the CV was paid for with a pack). */
   canPolish: boolean;
+  /** Pack-paid CVs: AI runs left on this CV. Null when unmetered (paid plan) or not available. */
+  aiLeft: { polish: number; review: number } | null;
 }
 
 /** What a job asks for, as GoMoxie's score engine reads it. */

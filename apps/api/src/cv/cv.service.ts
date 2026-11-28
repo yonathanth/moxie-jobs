@@ -21,7 +21,7 @@ import { BotService } from "../bot/bot.service";
 import { escapeHtml } from "../bot/bot.messages";
 import { PrismaService } from "../prisma/prisma.service";
 import { SettingsService } from "../settings/settings.service";
-import { allowanceLeft, cvAsText, cvTitle, decideCharge, jobDescriptionFor, planUnlocks, toPlainContent } from "./cv.rules";
+import { aiAccess, allowanceLeft, cvAsText, PACK_AI_PER_CV, cvTitle, decideCharge, jobDescriptionFor, planUnlocks, toPlainContent } from "./cv.rules";
 import { GomoxieClient } from "./gomoxie.client";
 
 const DAY = 24 * 3_600_000;
@@ -107,7 +107,7 @@ export class CvService {
     let doc = await this.owned(user, id);
     if (doc.charge === "locked" && (await this.unlockWithPlan(user.id)) > 0) doc = await this.owned(user, id);
     const settings = await this.settings.get();
-    return this.detail(doc, user, await this.jobTitles([doc.jobId]), this.canPolish(user, settings));
+    return this.detail(doc, user, await this.jobTitles([doc.jobId]), this.paidPlan(user, settings));
   }
 
   /** Unlocks a locked CV with one pack credit of its kind, then sends the clean PDF. */
@@ -124,11 +124,11 @@ export class CvService {
     await this.sendPdf(user, doc.id).catch(() => undefined);
     const fresh = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
     const settings = await this.settings.get();
-    return this.detail(unlocked, fresh, await this.jobTitles([unlocked.jobId]), this.canPolish(fresh, settings));
+    return this.detail(unlocked, fresh, await this.jobTitles([unlocked.jobId]), this.paidPlan(fresh, settings));
   }
 
-  /** AI polish and AI check come with paid plans (and the beta). */
-  private canPolish(user: User, settings: Awaited<ReturnType<SettingsService["get"]>>): boolean {
+  /** Paid plans (and the beta) get AI on every CV, unmetered. */
+  private paidPlan(user: User, settings: Awaited<ReturnType<SettingsService["get"]>>): boolean {
     return effectivePlan(user, settings) !== "free";
   }
 
@@ -137,19 +137,37 @@ export class CvService {
     return a?.requirements ?? null;
   }
 
-  /** AI polish (paid plans). Returns the rewritten CV for the editor to apply; nothing is saved here. */
+  /**
+   * Runs one AI call on a CV if the person may: paid plans always; pack-paid CVs up to PACK_AI_PER_CV
+   * per kind (taken atomically, given back if the engine fails).
+   */
+  private async withAi<T>(user: User, doc: CvDocument, column: "aiPolishUsed" | "aiReviewUsed", label: string, run: () => Promise<T>): Promise<T> {
+    const access = aiAccess(this.paidPlan(user, await this.settings.get()), doc.charge);
+    if (!access) throw new PaywallException(`${label} comes with Pro, Career and CV packs.`);
+    if (access === "plan") return run();
+    const taken = await this.prisma.cvDocument.updateMany({ where: { id: doc.id, [column]: { lt: PACK_AI_PER_CV } }, data: { [column]: { increment: 1 } } });
+    if (taken.count === 0) throw new PaywallException(`You've used the ${PACK_AI_PER_CV} ${label.toLowerCase()}s that come with this CV. Pro and Career include it on every CV.`);
+    try {
+      return await run();
+    } catch (e) {
+      await this.prisma.cvDocument.update({ where: { id: doc.id }, data: { [column]: { decrement: 1 } } }).catch(() => undefined);
+      throw e;
+    }
+  }
+
+  /** AI polish (paid plans, pack-paid CVs). Returns the rewritten CV for the editor to apply; nothing is saved here. */
   async polish(user: User, id: string, body: { content?: CvContent; targets: CvPolishTarget[] | "all" }): Promise<CvPolishResponse> {
     const doc = await this.owned(user, id);
-    if (!this.canPolish(user, await this.settings.get())) throw new PaywallException("AI polish comes with Pro and Career.");
-    const result = await this.engine.polish(body.content ?? (doc.content as CvContent), doc.templateId, body.targets, this.requirementsOf(doc));
+    const result = await this.withAi(user, doc, "aiPolishUsed", "AI polish", () =>
+      this.engine.polish(body.content ?? (doc.content as CvContent), doc.templateId, body.targets, this.requirementsOf(doc)),
+    );
     return { ...result, content: toPlainContent(result.content) };
   }
 
-  /** AI check (paid plans): recruiter-style tips. */
+  /** AI check (paid plans, pack-paid CVs): recruiter-style tips. */
   async review(user: User, id: string, content?: CvContent): Promise<CvReviewTip[]> {
     const doc = await this.owned(user, id);
-    if (!this.canPolish(user, await this.settings.get())) throw new PaywallException("AI check comes with Pro and Career.");
-    return this.engine.review(content ?? (doc.content as CvContent), doc.templateId, this.requirementsOf(doc));
+    return this.withAi(user, doc, "aiReviewUsed", "AI check", () => this.engine.review(content ?? (doc.content as CvContent), doc.templateId, this.requirementsOf(doc)));
   }
 
   async templates(): Promise<CvTemplateDto[]> {
@@ -267,7 +285,7 @@ export class CvService {
       },
     });
     const fresh = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    return { status: "ok", cv: this.detail(doc, fresh, job ? new Map([[job.id, job.title]]) : new Map(), this.canPolish(user, settings)) };
+    return { status: "ok", cv: this.detail(doc, fresh, job ? new Map([[job.id, job.title]]) : new Map(), this.paidPlan(user, settings)) };
   }
 
   /* ---------- editing ---------- */
@@ -287,7 +305,7 @@ export class CvService {
       },
     });
     const settings = await this.settings.get();
-    return this.detail(updated, user, await this.jobTitles([updated.jobId]), this.canPolish(user, settings));
+    return this.detail(updated, user, await this.jobTitles([updated.jobId]), this.paidPlan(user, settings));
   }
 
   async remove(user: User, id: string): Promise<void> {
@@ -350,7 +368,8 @@ export class CvService {
     };
   }
 
-  private detail(d: CvDocument, user: Pick<User, "cvNewCredits" | "cvTailorCredits">, jobs: Map<string, string>, canPolish: boolean): CvDetailDto {
+  private detail(d: CvDocument, user: Pick<User, "cvNewCredits" | "cvTailorCredits">, jobs: Map<string, string>, paidPlan: boolean): CvDetailDto {
+    const access = aiAccess(paidPlan, d.charge);
     const analysis = (d.jobAnalysis ?? null) as { gaps?: string[] } | null;
     const questions = Array.isArray(d.questions) ? (d.questions as { id: string; question: string; reason?: string }[]) : [];
     return {
@@ -361,7 +380,8 @@ export class CvService {
       gaps: analysis?.gaps ?? [],
       questions: questions.filter((q) => q && typeof q.question === "string").slice(0, 5),
       jobRequirements: this.requirementsOf(d),
-      canPolish,
+      canPolish: access !== null,
+      aiLeft: access === "pack" ? { polish: Math.max(0, PACK_AI_PER_CV - d.aiPolishUsed), review: Math.max(0, PACK_AI_PER_CV - d.aiReviewUsed) } : null,
     };
   }
 }

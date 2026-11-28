@@ -97,8 +97,10 @@ export function ScoreChip({ score, onOpen }: { score: CvScore; onOpen: () => voi
 export interface ScoreSheetProps {
   score: CvScore;
   content: CvContent;
-  /** Paid plan: full breakdown, AI polish, AI check. */
+  /** Paid plan or pack-paid CV: full breakdown, AI polish, AI check. */
   canPolish: boolean;
+  /** Pack-paid CVs: AI runs left on this CV (null = unmetered). */
+  aiLeft?: { polish: number; review: number } | null;
   /** Requirements the tailoring found the person may not meet. */
   gaps: string[];
   isTailored: boolean;
@@ -110,6 +112,8 @@ export interface ScoreSheetProps {
   reviewing: boolean;
   tips: CvReviewTip[] | null;
 }
+
+const leftText = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export function ScoreSheet(props: ScoreSheetProps) {
   const { score, canPolish, polishingKey } = props;
@@ -333,6 +337,7 @@ export function ScoreSheet(props: ScoreSheetProps) {
                 <span className="text-sm font-semibold">{improve.length ? "Improve what's there" : "Nothing to improve"}</span>
                 {aiFixable.length > 0 && polishButton("all", "all", "Polish all")}
               </div>
+              {props.aiLeft && aiFixable.length > 0 && <p className="text-[11px] text-hint">{leftText(props.aiLeft.polish, "AI polish", "AI polishes")} left on this CV</p>}
               {improve.length === 0 && <p className="text-xs text-hint">Every check passes. Nice work.</p>}
               <ul className="space-y-1.5">{improve.map((check) => checkItem(check, true))}</ul>
             </div>
@@ -352,6 +357,7 @@ export function ScoreSheet(props: ScoreSheetProps) {
                 </button>
               </div>
               {!props.tips && <p className="text-xs text-hint">A recruiter-style read of your CV. Tips don&apos;t change the score.</p>}
+              {props.aiLeft && <p className="text-[11px] text-hint">{leftText(props.aiLeft.review, "AI check", "AI checks")} left on this CV</p>}
               {props.tips?.length === 0 && <p className="text-xs text-hint">No further tips. It reads well.</p>}
               {props.tips && props.tips.length > 0 && (
                 <ul className="space-y-1.5">
@@ -385,7 +391,7 @@ export function ScoreSheet(props: ScoreSheetProps) {
                   </span>
                 </span>
                 <span className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-medium text-hint">With Pro and Career</span>
+                  <span className="text-[11px] font-medium text-hint">With Pro, Career or a CV pack</span>
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white">
                     Unlock {fmtGain(improveGain)} <ArrowRight className="size-3.5" />
                   </span>

@@ -57,6 +57,9 @@ jobs:
             # Apply database migrations
             npx --yes pnpm@10.13.1 db:migrate:deploy
 
+            # Upsert job categories and professions (never deletes; leaves admin-tuned sources alone)
+            npx --yes pnpm@10.13.1 db:seed:taxonomy
+
             # Start or restart the API, worker and web app
             pm2 startOrRestart ecosystem.config.cjs --update-env
             pm2 save

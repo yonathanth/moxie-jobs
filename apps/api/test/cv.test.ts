@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PLAN_LIMITS } from "@ethio/shared";
-import { allowanceLeft, cvAsText, cvTitle, decideCharge, jobDescriptionFor, planUnlocks, toPlainContent, type ChargeInput } from "../src/cv/cv.rules";
+import { aiAccess, allowanceLeft, cvAsText, cvTitle, decideCharge, jobDescriptionFor, planUnlocks, toPlainContent, type ChargeInput } from "../src/cv/cv.rules";
 
 const base: ChargeInput = {
   flow: "create",
@@ -106,5 +106,16 @@ describe("planUnlocks (locked CVs a plan covers after upgrading)", () => {
   it("unlocks everything on an unlimited plan, and nothing on free", () => {
     expect(planUnlocks(locked, { cvNewPerMonth: null, cvTailorPerMonth: null }, { new: 0, tailor: 0 })).toHaveLength(5);
     expect(planUnlocks(locked, { cvNewPerMonth: 0, cvTailorPerMonth: 0 }, { new: 0, tailor: 0 })).toEqual([]);
+  });
+});
+
+describe("aiAccess (who gets AI polish and AI check on a CV)", () => {
+  it("paid plans get it on every CV, unmetered", () => {
+    for (const charge of ["free_base", "taster", "plan", "credit", "purchase", "locked"]) expect(aiAccess(true, charge)).toBe("plan");
+  });
+  it("free plan: only CVs paid for with a pack, metered per CV", () => {
+    expect(aiAccess(false, "credit")).toBe("pack");
+    expect(aiAccess(false, "purchase")).toBe("pack");
+    for (const charge of ["free_base", "taster", "plan", "locked"]) expect(aiAccess(false, charge)).toBeNull();
   });
 });

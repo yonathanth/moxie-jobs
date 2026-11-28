@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "CvDocument" ADD COLUMN     "aiPolishUsed" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "aiReviewUsed" INTEGER NOT NULL DEFAULT 0;

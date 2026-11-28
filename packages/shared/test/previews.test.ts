@@ -52,6 +52,7 @@ describe("previews", () => {
 
   it("NGO and other kinds: the specific kind is for subscribers; never says premium", () => {
     const p = kindMatchPreview({ ...job, hirer: "An embassy", employerType: "embassy", isOverseas: false }, links);
+    expect(p.caption.split("\n")[0]).toBe("<b>An embassy</b> is hiring: Junior Software Engineer");
     expect(p.caption).toContain("An embassy is hiring a part-time remote Junior Software Engineer");
     expect(p.caption).toContain(`Embassy jobs are for subscribers.\n${proLink}`);
     expect(p.caption.toLowerCase()).not.toContain("premium");

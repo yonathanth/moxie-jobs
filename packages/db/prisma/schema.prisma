@@ -433,6 +433,9 @@ model CvDocument {
   // While locked: which one-time product unlocks it (cv_new | cv_tailor).
   lockedProduct String?
   unlockedAt    DateTime?
+  /// AI polish / AI check runs on this CV. Counted only for pack-paid CVs (capped per CV); plans are unmetered.
+  aiPolishUsed  Int       @default(0)
+  aiReviewUsed  Int       @default(0)
   /// Deleted by the person: hidden, but still counts toward free and plan CV usage.
   deletedAt     DateTime?
   // From the engine: job-fit gaps and follow-up questions (shown in the editor).

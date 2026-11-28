@@ -21,6 +21,19 @@ export interface ChargeInput {
 
 export type ChargeDecision = { charge: Exclude<CvCharge, "locked"> } | { charge: "locked"; product: CvProduct } | { blocked: "unpaid_cap" };
 
+/** AI polish / AI check runs each pack-paid CV gets (paid plans are unmetered). */
+export const PACK_AI_PER_CV = 5;
+
+/**
+ * Who gets AI on a CV: everyone on a paid plan (every CV, unmetered), and anyone on a CV
+ * they paid for with a pack (credit or one-off purchase), capped per CV. Free and locked CVs: no.
+ *   "plan" → unmetered · "pack" → counted against PACK_AI_PER_CV · null → not available
+ */
+export function aiAccess(paidPlan: boolean, charge: string): "plan" | "pack" | null {
+  if (paidPlan) return "plan";
+  return charge === "credit" || charge === "purchase" ? "pack" : null;
+}
+
 /** Remaining allowance: null = unlimited (fair use caps it silently). */
 export function allowanceLeft(perMonth: number | null, used: number): number | null {
   if (perMonth === null) return used >= CV_FAIR_USE_PER_MONTH ? 0 : null;

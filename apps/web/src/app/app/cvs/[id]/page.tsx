@@ -157,27 +157,24 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
 
       {/* Preview | Edit and the score, kept in reach while scrolling. */}
       <div className="sticky top-0 z-20 -mx-4 mt-4 flex items-center gap-2 border-b border-separator-subtle bg-bg/90 px-4 py-2 backdrop-blur">
-        <div className="grid flex-1 grid-cols-2 gap-1 rounded-xl border border-separator bg-surface p-1">
-          {(
-            [
-              ["preview", "Preview", Eye],
-              ["edit", "Edit", PencilLine],
-            ] as const
-          ).map(([key, label, Icon]) => (
+        {/* One toggle that names the other view: "Edit" while previewing, "Preview" while editing. */}
+        {(() => {
+          const [next, label, Icon] = tab === "preview" ? (["edit", "Edit", PencilLine] as const) : (["preview", "Preview", Eye] as const);
+          return (
             <button
-              key={key}
               type="button"
               onClick={() => {
                 haptic.select();
-                setTab(key);
+                setTab(next);
               }}
-              className={cx("flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-colors", tab === key ? "bg-ink text-white" : "text-hint")}
+              className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-ink px-3.5 py-2.5 text-sm font-semibold text-white transition-colors"
             >
               <Icon className="size-4" />
               {label}
             </button>
-          ))}
-        </div>
+          );
+        })()}
+        <div className="flex-1" />
         <SaveChip state={update.isPending ? "saving" : update.isError ? "error" : pendingSave ? "unsaved" : "saved"} onSave={saveNow} />
         <ScoreChip score={score} onOpen={() => setSheet("score")} />
       </div>
@@ -201,7 +198,7 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
           </button>
         </div>
       )}
-      {polish.error && !sheet && <p className="mt-2 text-center text-sm text-danger">{polish.error.message}</p>}
+      {(polish.error ?? review.error) && !sheet && <p className="mt-2 text-center text-sm text-danger">{(polish.error ?? review.error)?.message}</p>}
 
       {tab === "preview" ? (
         <div className="mt-2">
@@ -247,6 +244,7 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
           score={score}
           content={draft}
           canPolish={doc.canPolish}
+          aiLeft={doc.aiLeft}
           gaps={doc.gaps}
           isTailored={doc.kind === "tailored"}
           onClose={() => setSheet(null)}

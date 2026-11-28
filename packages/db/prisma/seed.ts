@@ -2,6 +2,7 @@
  * Idempotent seed: upserts the taxonomy. Safe to run repeatedly; it never
  * deletes rows (a profession removed from the seed file stays in the DB, so
  * users following it keep working; deactivate it from the admin instead).
+ * `--taxonomy-only` skips sources (admins tune those), so deploys can run it every time.
  */
 import { PrismaClient } from "@prisma/client";
 import { SOURCES } from "./seed-data/sources";
@@ -39,6 +40,11 @@ async function main() {
         create: { id, name, aliases },
         update: { name, aliases },
       });
+    }
+
+    if (process.argv.includes("--taxonomy-only")) {
+      console.log(`Seeded ${FUNCTIONS.length} functions, ${professions} professions, ${FIELDS_OF_STUDY.length} fields of study (sources skipped).`);
+      return;
     }
 
     // Sources: descriptive fields follow the seed file; handle / channel id /

@@ -18,6 +18,7 @@
     "migrate:status": "dotenv -e ../../.env -- prisma migrate status",
     "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "seed:taxonomy": "dotenv -e ../../.env -- tsx prisma/seed.ts --taxonomy-only",
     "studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": {

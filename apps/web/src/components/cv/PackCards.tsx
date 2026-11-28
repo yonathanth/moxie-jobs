@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { FilePlus2, Loader2, Target } from "lucide-react";
+import { FilePlus2, Loader2, Sparkles, Target } from "lucide-react";
 import type { CvPackDto, CvPackId } from "@ethio/shared";
 import { formatBirr } from "@/lib/plans";
 
@@ -43,6 +43,10 @@ export function PackCards({ packs, busyId, disabled, onBuy }: { packs: CvPackDto
                 <span className="inline-flex items-center gap-1">
                   <Target className="size-3.5" />
                   {p.tailored} tailored
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Sparkles className="size-3.5" />
+                  AI polish &amp; check on each
                 </span>
               </p>
             </div>

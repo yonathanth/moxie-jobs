@@ -11,7 +11,8 @@
     "db:generate": "pnpm --filter @ethio/db generate",
     "db:migrate:deploy": "pnpm --filter @ethio/db migrate:deploy",
     "db:migrate:status": "pnpm --filter @ethio/db migrate:status",
-    "db:seed": "pnpm --filter @ethio/db seed"
+    "db:seed": "pnpm --filter @ethio/db seed",
+    "db:seed:taxonomy": "pnpm --filter @ethio/db seed:taxonomy"
   },
   "devDependencies": {
     "turbo": "^2.5.8",
