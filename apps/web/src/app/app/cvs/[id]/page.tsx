@@ -218,19 +218,8 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
         </div>
       ) : (
         <div className="mt-2">
-          <p className="mb-2 flex items-center gap-1.5 px-1 text-[12px] text-hint">
-            {saving ? (
-              <>
-                <Spinner size="xs" /> Saving…
-              </>
-            ) : update.isError ? (
-              <span className="text-danger">Not saved: {update.error.message}</span>
-            ) : (
-              <>
-                <Check className="size-3.5 text-emerald" /> All changes saved. Your CV saves automatically as you type.
-              </>
-            )}
-          </p>
+          {/* The Saved chip in the bar shows save state; only a failure needs its reason spelled out. */}
+          {update.isError && <p className="mb-2 px-1 text-[12px] text-danger">Not saved: {update.error.message}</p>}
           <CvEditor content={draft} onChange={edit} target={target} />
           <DeleteButton id={doc.id} />
         </div>
