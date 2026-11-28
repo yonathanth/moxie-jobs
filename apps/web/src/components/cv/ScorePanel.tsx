@@ -81,14 +81,12 @@ export function ScoreChip({ score, onOpen }: { score: CvScore; onOpen: () => voi
       type="button"
       onClick={onOpen}
       aria-label={`CV score ${score.total}. See why`}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-separator bg-surface py-1 pl-1 pr-2.5 transition-colors hover:border-neutral-300 active:bg-neutral-50"
+      className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-separator bg-surface pl-1 pr-3 transition-colors hover:border-neutral-300 active:bg-neutral-50"
     >
       <ScoreRing score={score.total} size={32} />
-      <span className="flex flex-col items-start leading-none">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-hint">Score</span>
-        <span className="mt-0.5 inline-flex items-center gap-0.5 text-[12px] font-semibold text-accent-strong">
-          Why <ArrowRight className="size-3" aria-hidden="true" />
-        </span>
+      <span className="truncate text-[13px] font-semibold text-neutral-700">CV score</span>
+      <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-accent-strong">
+        See why <ArrowRight className="size-3.5" aria-hidden="true" />
       </span>
     </button>
   );

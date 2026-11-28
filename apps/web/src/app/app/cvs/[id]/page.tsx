@@ -167,16 +167,15 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
                 haptic.select();
                 setTab(next);
               }}
-              className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-ink px-3.5 py-2.5 text-sm font-semibold text-white transition-colors"
+              className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-ink px-3.5 text-sm font-semibold text-white transition-colors"
             >
               <Icon className="size-4" />
               {label}
             </button>
           );
         })()}
-        <div className="flex-1" />
-        <SaveChip state={update.isPending ? "saving" : update.isError ? "error" : pendingSave ? "unsaved" : "saved"} onSave={saveNow} />
         <ScoreChip score={score} onOpen={() => setSheet("score")} />
+        <SaveChip state={update.isPending ? "saving" : update.isError ? "error" : pendingSave ? "unsaved" : "saved"} onSave={saveNow} />
       </div>
 
       {undo && (
@@ -273,7 +272,7 @@ function SaveChip({ state, onSave }: { state: "saved" | "saving" | "unsaved" | "
   }
   if (state === "saved") {
     return (
-      <span className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[13px] font-semibold text-emerald-800" aria-live="polite">
+      <span className="inline-flex h-10 shrink-0 items-center gap-1 px-1 text-[13px] font-semibold text-emerald-700" aria-live="polite">
         <Check className="size-4" />
         Saved
       </span>
