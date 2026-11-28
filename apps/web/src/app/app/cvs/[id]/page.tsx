@@ -167,7 +167,7 @@ function CvWorkspace({ initial }: { initial: CvDetailDto }) {
                 haptic.select();
                 setTab(next);
               }}
-              className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-ink px-3.5 text-sm font-semibold text-white transition-colors"
+              className="flex h-10 min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 rounded-xl bg-ink px-3.5 text-sm font-semibold text-white transition-colors"
             >
               <Icon className="size-4" />
               {label}
