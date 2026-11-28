@@ -13,7 +13,7 @@ import { useBackButton, useJob, usePayment, usePricing } from "@/components/mini
 import { useSession } from "@/components/miniapp/session";
 import { usePaywall } from "@/components/paywall";
 import { Button, Card, CenteredMessage, ErrorText, IconTile, PageHeader, Screen, Sheet, Skeleton, StickyFooter, type IconTone } from "@/components/ui";
-import { MIN_SOURCE_CHARS, MinLengthHint, openCheckout, PackPrompt, PackWaiting, Working, type Mode } from "@/components/cv/flow";
+import { MIN_SOURCE_CHARS, MinLengthHint, openCheckout, PackPrompt, PackWaiting, Working, useWorkingHold, type Mode } from "@/components/cv/flow";
 import { MoxieLoader } from "@/components/moxie";
 import { ApiError } from "@/lib/api";
 import { formatBirr } from "@/lib/plans";
@@ -47,6 +47,7 @@ function NewCv() {
   // Out of free/included CVs: the request waits here while they buy a pack, then runs again.
   const [blocked, setBlocked] = useState<{ req: CvGenerateRequest; thenTailor: boolean; message: string } | null>(null);
   const [payment, setPayment] = useState<{ id: string; url: string } | null>(null);
+  const hold = useWorkingHold();
   useBackButton(() => router.back());
 
   const bases = useMemo(() => (list.data?.items ?? []).filter((c) => c.kind === "base"), [list.data]);
@@ -61,34 +62,39 @@ function NewCv() {
       <ScreenSkeleton variant="form" />
     );
   }
-  if (generate.isPending) return <Working phase={phase ?? (mode === "tailor" ? "tailor" : "base")} flow={mode} jobTitle={job.data?.title} />;
+  if (generate.isPending || hold.active) return <Working phase={phase ?? (mode === "tailor" ? "tailor" : "base")} flow={mode} jobTitle={job.data?.title} done={hold.done} />;
 
-  const open = (id: string) => router.replace(`/app/cvs/${id}`);
+  /** Opens the CV once Moxie has had her moment (she stays on screen until the page changes). */
+  const open = (id: string) => hold.finish(() => router.replace(`/app/cvs/${id}`));
 
   /** Generates; for "tailor with no CV yet", makes the free base CV first, then tailors it. */
   const run = async (req: CvGenerateRequest, thenTailor: boolean) => {
     setMismatch(null);
+    hold.start();
     try {
       setPhase(thenTailor ? "base" : req.flow === "tailor" ? "tailor" : "base");
       const res = await generate.mutateAsync(req);
       if (res.status === "mismatch") {
+        hold.stop();
         haptic.error();
         return setMismatch({ reason: res.reason, missing: res.missing });
       }
       if (!thenTailor || !jobId) {
         haptic.success();
-        return open(res.cv.id);
+        return await open(res.cv.id);
       }
       setPhase("tailor");
       const tailored = await generate.mutateAsync({ flow: "tailor", jobId, baseCvId: res.cv.id });
       if (tailored.status === "mismatch") {
+        hold.stop();
         haptic.error();
         setMismatch({ reason: tailored.reason, missing: tailored.missing, newCvId: res.cv.id });
         return;
       }
       haptic.success();
-      open(tailored.cv.id);
+      await open(tailored.cv.id);
     } catch (err) {
+      hold.stop();
       haptic.error();
       // 402: no allowance or credits left and the unpaid limit is reached. Offer packs, keep the request.
       if (err instanceof ApiError && err.status === 402) setBlocked({ req, thenTailor, message: err.message });

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { CvGenerateRequest, CvQuotaDto, CvSummaryDto } from "@ethio/shared";
 import { ContactForm, Field } from "./ContactForm";
-import { MIN_SOURCE_CHARS, MinLengthHint, PackPrompt, Working, openCheckout } from "./flow";
+import { MIN_SOURCE_CHARS, MinLengthHint, PackPrompt, Working, openCheckout, useWorkingHold } from "./flow";
 import { useGenerateCv, useImportCv } from "./hooks";
 import { useBackButton, usePayment } from "../miniapp/hooks";
 import { useSession } from "../miniapp/session";
@@ -61,17 +61,21 @@ export function NewCvModal({
   const [picked, setPicked] = useState<string | null>(cvs[0]?.id ?? null);
   const [blocked, setBlocked] = useState<{ req: CvGenerateRequest; message: string } | null>(null);
   const [payment, setPayment] = useState<{ id: string; url: string } | null>(null);
-  const busy = generate.isPending || importCv.isPending;
+  const hold = useWorkingHold();
+  const busy = generate.isPending || importCv.isPending || hold.active;
   useBackButton(busy ? null : onClose);
 
   const run = async (req: CvGenerateRequest) => {
+    hold.start();
     try {
       const res = await generate.mutateAsync(req);
       if (res.status !== "mismatch") {
         haptic.success();
-        router.push(`/app/cvs/${res.cv.id}`);
-      }
+        const id = res.cv.id;
+        await hold.finish(() => router.push(`/app/cvs/${id}`));
+      } else hold.stop();
     } catch (err) {
+      hold.stop();
       haptic.error();
       // 402: nothing left on the plan or in credits. Offer packs; the request waits.
       if (err instanceof ApiError && err.status === 402) setBlocked({ req, message: err.message });
@@ -127,8 +131,8 @@ export function NewCvModal({
       crowned={me.plan !== "free"}
       messages={[fileName ? `Reading ${fileName}…` : "Reading your CV…", "Finding your jobs and dates…", "Picking out your skills…"]}
     />
-  ) : generate.isPending ? (
-    <Working phase="base" flow={flow} />
+  ) : generate.isPending || hold.active ? (
+    <Working phase="base" flow={flow} done={hold.done} />
   ) : null;
 
   return (

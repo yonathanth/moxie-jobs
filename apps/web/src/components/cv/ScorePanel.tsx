@@ -85,10 +85,11 @@ export function ScoreChip({ score, onOpen }: { score: CvScore; onOpen: () => voi
     >
       <ScoreRing score={score.total} size={32} />
       <span className="flex min-w-0 flex-col items-start leading-tight">
-        <span className="whitespace-nowrap text-[12px] font-semibold text-neutral-700">CV score</span>
-        <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-[12px] font-semibold text-accent-strong">
-          See why <ArrowRight className="size-3" aria-hidden="true" />
-        </span>
+        <span className="text-[10px] font-medium uppercase tracking-wide text-hint">CV score</span>
+        <span className={cx("truncate text-[13px] font-bold", scoreTone(score.total).text)}>{scoreTone(score.total).label}</span>
+      </span>
+      <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-accent-soft px-2 py-1 text-[12px] font-semibold text-accent-strong">
+        See why <ArrowRight className="size-3" aria-hidden="true" />
       </span>
     </button>
   );

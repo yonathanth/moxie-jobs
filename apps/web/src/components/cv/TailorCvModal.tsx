@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import type { CvGenerateRequest, CvSummaryDto, JobCardDto } from "@ethio/shared";
 import { ContactForm } from "./ContactForm";
-import { MIN_SOURCE_CHARS, MinLengthHint, PackPrompt, Working, openCheckout } from "./flow";
+import { MIN_SOURCE_CHARS, MinLengthHint, PackPrompt, Working, openCheckout, useWorkingHold } from "./flow";
 import { useGenerateCv, useImportCv } from "./hooks";
 import { FlowModal, OptionCard, PayingStep, StepTitle } from "./NewCvModal";
 import { useBackButton } from "../miniapp/hooks";
@@ -61,34 +61,41 @@ export function TailorCvModal({
   const [mismatch, setMismatch] = useState<Mismatch | null>(null);
   const [blocked, setBlocked] = useState<{ req: CvGenerateRequest; thenTailor: boolean; message: string } | null>(null);
   const [payment, setPayment] = useState<{ id: string; url: string } | null>(null);
-  const busy = generate.isPending || importCv.isPending;
+  const hold = useWorkingHold();
+  const busy = generate.isPending || importCv.isPending || hold.active;
   useBackButton(busy ? null : onClose);
 
   /** Tailors; with no CV yet, makes the free base CV from what they gave first, then tailors it. */
   const run = async (req: CvGenerateRequest, thenTailor: boolean) => {
     setMismatch(null);
+    hold.start();
     try {
       setPhase(thenTailor ? "base" : "tailor");
       const res = await generate.mutateAsync(req);
       if (res.status === "mismatch") {
+        hold.stop();
         haptic.error();
         setMismatch({ reason: res.reason, missing: res.missing });
         return setStep("mismatch");
       }
       if (!thenTailor) {
         haptic.success();
-        return router.push(`/app/cvs/${res.cv.id}`);
+        const id = res.cv.id;
+        return await hold.finish(() => router.push(`/app/cvs/${id}`));
       }
       setPhase("tailor");
       const tailored = await generate.mutateAsync({ flow: "tailor", jobId: job.id, baseCvId: res.cv.id });
       if (tailored.status === "mismatch") {
+        hold.stop();
         haptic.error();
         setMismatch({ reason: tailored.reason, missing: tailored.missing, newCvId: res.cv.id });
         return setStep("mismatch");
       }
       haptic.success();
-      router.push(`/app/cvs/${tailored.cv.id}`);
+      const id = tailored.cv.id;
+      await hold.finish(() => router.push(`/app/cvs/${id}`));
     } catch (err) {
+      hold.stop();
       haptic.error();
       if (err instanceof ApiError && err.status === 402) setBlocked({ req, thenTailor, message: err.message });
     }
@@ -141,8 +148,8 @@ export function TailorCvModal({
       crowned={me.plan !== "free"}
       messages={[fileName ? `Reading ${fileName}…` : "Reading your CV…", "Finding your jobs and dates…", "Picking out your skills…"]}
     />
-  ) : generate.isPending ? (
-    <Working phase={phase} flow="tailor" jobTitle={job.title} />
+  ) : generate.isPending || hold.active ? (
+    <Working phase={phase} flow="tailor" jobTitle={job.title} done={hold.done} />
   ) : null;
 
   return (

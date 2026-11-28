@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CvQuotaDto } from "@ethio/shared";
 import { PackCards } from "./PackCards";
 import { usePackCheckout } from "./hooks";
@@ -17,23 +17,61 @@ import { getWebApp, haptic } from "@/lib/telegram";
 
 export type Mode = "create" | "improve" | "tailor";
 
-/** Moxie at work while the AI writes, improves or tailors the CV (as on gomoxie.app). */
-export function Working({ phase, flow, jobTitle }: { phase: "base" | "tailor"; flow: Mode; jobTitle?: string }) {
+/** Moxie at work while the AI writes, improves or tailors the CV (as on gomoxie.app). `done`: she celebrates before the CV opens. */
+export function Working({ phase, flow, jobTitle, done = false }: { phase: "base" | "tailor"; flow: Mode; jobTitle?: string; done?: boolean }) {
   const { me } = useSession();
   const crowned = me.plan !== "free";
+  const end = { done, doneMessage: phase === "tailor" ? "Your tailored CV is ready!" : "Your CV is ready!" };
   if (phase === "tailor") {
     return (
       <MoxieLoader
         animation="tailor"
         crowned={crowned}
+        {...end}
         messages={[jobTitle ? `Tailoring your CV to ${jobTitle}…` : "Reading the job post…", "Matching your experience to it…", "Cutting what doesn't fit…", "Keeping it all true to you…"]}
       />
     );
   }
   if (flow === "improve") {
-    return <MoxieLoader animation="polish" crowned={crowned} messages={["Improving your CV…", "Tightening every bullet…", "Bringing your results forward…", "Cutting the filler…"]} />;
+    return <MoxieLoader animation="polish" crowned={crowned} {...end} messages={["Improving your CV…", "Tightening every bullet…", "Bringing your results forward…", "Cutting the filler…"]} />;
   }
-  return <MoxieLoader animation="write" crowned={crowned} messages={["Writing your CV…", "Choosing strong action verbs…", "Turning duties into results…", "Laying it out cleanly…"]} />;
+  return <MoxieLoader animation="write" crowned={crowned} {...end} messages={["Writing your CV…", "Choosing strong action verbs…", "Turning duties into results…", "Laying it out cleanly…"]} />;
+}
+
+/** Moxie works on screen at least this long, even when the AI is faster (as on gomoxie.app). */
+export const MIN_WORKING_MS = 3000;
+/** Then she celebrates this long before the CV opens. */
+export const DONE_MS = 1300;
+
+/**
+ * Keeps Moxie on screen from the moment the work starts until the next page has taken over, so the
+ * form never flashes back in between (the request finishing ≠ the navigation finishing).
+ *   start() when the work begins · stop() on an error, mismatch or paywall · finish(go) on success:
+ *   waits out MIN_WORKING_MS, shows "done" for DONE_MS, then calls go() and stays up until unmount.
+ */
+export function useWorkingHold() {
+  const startedAt = useRef(0);
+  const [active, setActive] = useState(false);
+  const [done, setDone] = useState(false);
+  const start = useCallback(() => {
+    if (!startedAt.current) startedAt.current = Date.now();
+    setDone(false);
+    setActive(true);
+  }, []);
+  const stop = useCallback(() => {
+    startedAt.current = 0;
+    setDone(false);
+    setActive(false);
+  }, []);
+  const finish = useCallback(async (go: () => void) => {
+    setActive(true);
+    const left = MIN_WORKING_MS - (Date.now() - (startedAt.current || Date.now()));
+    if (left > 0) await new Promise((r) => setTimeout(r, left));
+    setDone(true);
+    await new Promise((r) => setTimeout(r, DONE_MS));
+    go();
+  }, []);
+  return { active, done, start, stop, finish };
 }
 
 
